@@ -1,0 +1,50 @@
+[
+  {
+    "source_id": "bird:california_schools",
+    "question": "Please list the zip code of all the charter schools in Fresno County Office of Education."
+  },
+  {
+    "source_id": "bird:financial",
+    "question": "Which transaction types have the highest average transaction amount?"
+  },
+  {
+    "source_id": "bird:formula_1",
+    "question": "Which drivers have the most race wins?"
+  },
+  {
+    "source_id": "bird:student_club",
+    "question": "Which event types have the highest total budget amount?"
+  },
+  {
+    "source_id": "bird:superhero",
+    "question": "How many superheroes are associated with each publisher?"
+  },
+  {
+    "source_id": "bird:toxicology",
+    "question": "How many molecules are labeled toxic versus non-toxic?"
+  },
+  {
+    "source_id": "bird_interact_a:credit",
+    "question": "Compare average credit utilization across customer segments."
+  },
+  {
+    "source_id": "bird_interact_a:museum",
+    "question": "How many artifacts are in each conservation difficulty category by material?"
+  },
+  {
+    "source_id": "bird_interact_a:gaming",
+    "question": "Compare average latency across gaming device scopes."
+  },
+  {
+    "source_id": "bird_interact_a:news",
+    "question": "Which user segments have the highest average satisfaction score?"
+  },
+  {
+    "source_id": "bird_interact_a:robot",
+    "question": "Compare average payload capacity across robot types."
+  },
+  {
+    "source_id": "bird_interact_a:solar",
+    "question": "Which solar plants have the highest generation capacity?"
+  }
+]

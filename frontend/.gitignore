@@ -1,0 +1,12 @@
+node_modules
+dist
+release
+.desktop/
+plan/
+.env
+.env.*
+!.env.example
+*.log
+dev.out
+.DS_Store
+/index-*.js

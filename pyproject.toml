@@ -3,27 +3,17 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dbagent"
+name = "aurigasql"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "cloudflare",
-    "datasets",  # ensures `import datasets` resolves to HF (not the repo's datasets/ dir), which lancedb's optional converter imports
-    "dbt-core",
-    "dbt-duckdb",
-    "duckdb",
-    "func-timeout",
-    "gdown",
-    "lancedb",
-    "litellm",
-    "numpy",
-    "pandas",
-    "psycopg",
-    "pyyaml",
-    "python-dotenv",
-    "sentence-transformers",
-    "sqlglot",
-    "tenacity",
+    "duckdb>=1.0.0",
+    "litellm>=1.0.0",
+    "psycopg>=3.1.0",
+    "pymysql>=1.1.0",
+    "python-dotenv>=1.0.0",
+    "sqlglot>=23.0.0",
+    "tenacity>=8.0.0",
 ]
 
 [tool.setuptools.packages.find]

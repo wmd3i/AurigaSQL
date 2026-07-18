@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "bird": [
+    {
+      "id": "california_schools",
+      "display_name": "California Schools",
+      "description": "California school, district, enrollment, and assessment data."
+    },
+    {
+      "id": "financial",
+      "display_name": "Financial",
+      "description": "Banking accounts, clients, loans, transactions, and payment data."
+    },
+    {
+      "id": "formula_1",
+      "display_name": "Formula 1",
+      "description": "Formula 1 races, circuits, drivers, constructors, lap times, and results."
+    },
+    {
+      "id": "student_club",
+      "display_name": "Student Club",
+      "description": "Student club members, events, budgets, expenses, income, and attendance."
+    },
+    {
+      "id": "superhero",
+      "display_name": "Superhero",
+      "description": "Superheroes, publishers, powers, attributes, alignments, and character traits."
+    },
+    {
+      "id": "toxicology",
+      "display_name": "Toxicology",
+      "description": "Molecules, atoms, bonds, and toxicology labels."
+    }
+  ],
+  "bird_interact": [
+    {
+      "id": "credit",
+      "display_name": "Credit",
+      "description": "Credit applications, customer finances, risk, and compliance data."
+    },
+    {
+      "id": "museum",
+      "display_name": "Museum",
+      "description": "Museum artifacts, exhibitions, conservation, and environmental risk data."
+    },
+    {
+      "id": "gaming",
+      "display_name": "Gaming",
+      "description": "Gaming device tests, performance, controls, durability, media, and RGB data."
+    },
+    {
+      "id": "news",
+      "display_name": "News",
+      "description": "News users, devices, sessions, articles, recommendations, and interactions."
+    },
+    {
+      "id": "robot",
+      "display_name": "Robot",
+      "description": "Robot records, operations, performance, maintenance, faults, and safety data."
+    },
+    {
+      "id": "solar",
+      "display_name": "Solar",
+      "description": "Solar plants, panels, inverters, performance, maintenance, environment, and alerts."
+    }
+  ],
+  "demo_questions": [
+    {
+      "source_id": "bird:california_schools",
+      "question": "Please list the zip code of all the charter schools in Fresno County Office of Education."
+    },
+    {
+      "source_id": "bird:financial",
+      "question": "Which transaction types have the highest average transaction amount?"
+    },
+    {
+      "source_id": "bird:formula_1",
+      "question": "Which drivers have the most race wins?"
+    },
+    {
+      "source_id": "bird:student_club",
+      "question": "Which event types have the highest total budget amount?"
+    },
+    {
+      "source_id": "bird:superhero",
+      "question": "How many superheroes are associated with each publisher?"
+    },
+    {
+      "source_id": "bird:toxicology",
+      "question": "How many molecules are labeled toxic versus non-toxic?"
+    },
+    {
+      "source_id": "bird_interact_a:credit",
+      "question": "Compare average credit utilization across customer segments."
+    },
+    {
+      "source_id": "bird_interact_a:museum",
+      "question": "How many artifacts are in each conservation difficulty category by material?"
+    },
+    {
+      "source_id": "bird_interact_a:gaming",
+      "question": "Compare average latency across gaming device scopes."
+    },
+    {
+      "source_id": "bird_interact_a:news",
+      "question": "Which user segments have the highest average satisfaction score?"
+    },
+    {
+      "source_id": "bird_interact_a:robot",
+      "question": "Compare average payload capacity across robot types."
+    },
+    {
+      "source_id": "bird_interact_a:solar",
+      "question": "Which solar plants have the highest generation capacity?"
+    }
+  ]
+}

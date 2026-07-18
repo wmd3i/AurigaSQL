@@ -1,0 +1,15 @@
+CREATE TABLE "alerts" ("alertreg" TEXT, "compreg" TEXT, "deviceref" TEXT, "incidentref" TEXT, "alertmoment" TEXT, "alertstat" TEXT, "alertcnt" INTEGER, "maintprior" TEXT, "replaceprior" TEXT, "optpotential" TEXT, PRIMARY KEY ("alertreg"));
+
+CREATE TABLE "electrical" ("elecregistry" TEXT, "engyunitref" TEXT, "efflogref" TEXT, "iscinita" NUMERIC, "isccurra" NUMERIC, "vocinitv" NUMERIC, "voccurrv" NUMERIC, "impinita" NUMERIC, "impcurra" NUMERIC, "vmpinitv" NUMERIC, "vmpcurrv" NUMERIC, "ffactorinit" NUMERIC, "ffactorcurr" NUMERIC, "seriesresohm" NUMERIC, "shuntresohm" NUMERIC, PRIMARY KEY ("elecregistry"));
+
+CREATE TABLE "environment" ("envregistry" TEXT, "arearegistry" TEXT, "envmoment" TEXT, "celltempc" NUMERIC, "ambtempc" NUMERIC, "soillosspct" NUMERIC, "dustdengm2" NUMERIC, "cleancycledays" INTEGER, "lastcleandt" TEXT, "relhumpct" NUMERIC, "windspdms" NUMERIC, "winddirdeg" NUMERIC, "preciptmm" NUMERIC, "airpresshpa" NUMERIC, "uv_idx" NUMERIC, "cloudcovpct" NUMERIC, "snowcovpct" NUMERIC, "irradiance_conditions" TEXT, PRIMARY KEY ("envregistry"));
+
+CREATE TABLE "inverter" ("invertregistry" TEXT, "siteref" TEXT, "invertmoment" TEXT, "inverttempc" NUMERIC, "gridvolt" NUMERIC, "gridfreqhz" NUMERIC, "pwrqualidx" NUMERIC, "power_metrics" TEXT, PRIMARY KEY ("invertregistry"));
+
+CREATE TABLE "maintenance" ("maintregistry" TEXT, "powerref" TEXT, "compref" TEXT, "obsref" TEXT, "inspectmeth" TEXT, "inspectres" TEXT, "inspectdate" TEXT, "maintsched" TEXT, "wtystatus" TEXT, "wtyclaimcnt" INTEGER, "maintcostusd" NUMERIC, "cleancostusd" NUMERIC, "replacecostusd" NUMERIC, "revlossusd" NUMERIC, PRIMARY KEY ("maintregistry"));
+
+CREATE TABLE "panel" ("panemark" TEXT, "hubregistry" TEXT, "panemfr" TEXT, "paneline" TEXT, "panetype" TEXT, "powratew" INTEGER, "paneeffpct" NUMERIC, "nomtempc" NUMERIC, "tempcoef" NUMERIC, PRIMARY KEY ("panemark"));
+
+CREATE TABLE "performance" ("perfregistry" TEXT, "solmodref" TEXT, "perfmoment" TEXT, "measpoww" NUMERIC, "powlossw" NUMERIC, "efficiency_profile" TEXT, PRIMARY KEY ("perfregistry"));
+
+CREATE TABLE "plant" ("growregistry" TEXT, "growalias" TEXT, "gencapmw" NUMERIC, "initdate" TEXT, PRIMARY KEY ("growregistry"));

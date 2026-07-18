@@ -1,0 +1,19 @@
+CREATE TABLE "actuation_data" ("actreg" TEXT, "actoperref" TEXT, "actdetref" TEXT, "actrecref" TEXT, "tcpxval" NUMERIC, "tcpyval" REAL, "tcpzval" REAL, "tcp_rxval" NUMERIC, "tcp_ryval" REAL, "tcp_rzval" REAL, "tcpspeedval" NUMERIC, "tcpaccelval" REAL, "pathaccmmval" NUMERIC, "poserrmmval" REAL, "orienterrdegval" REAL, "payloadwval" NUMERIC, "payloadival" REAL, "m1currval" NUMERIC, "m2currval" REAL, "m3currval" REAL, "m4currval" NUMERIC, "m5currval" REAL, "m6currval" REAL, "m1voltval" NUMERIC, "m2voltval" REAL, "m3voltval" REAL, "m4voltval" NUMERIC, "m5voltval" REAL, "m6voltval" REAL, PRIMARY KEY ("actreg"));
+
+CREATE TABLE "joint_condition" ("jcondoperref" TEXT, "jcrecref" TEXT, "jcdetref" TEXT, "j1tempval" NUMERIC, "j2tempval" REAL, "j3tempval" NUMERIC, "j4tempval" REAL, "j5tempval" NUMERIC, "j6tempval" REAL, "j1vibval" NUMERIC, "j2vibval" REAL, "j3vibval" REAL, "j4vibval" NUMERIC, "j5vibval" REAL, "j6vibval" REAL, "j1backval" NUMERIC, "j2backval" NUMERIC, "j3backval" REAL, "j4backval" REAL, "j5backval" NUMERIC, "j6backval" REAL);
+
+CREATE TABLE "joint_performance" ("jperfoperref" TEXT, "jperfrecref" TEXT, "jperfdetref" TEXT, "joint_metrics" TEXT);
+
+CREATE TABLE "maintenance_and_fault" ("upkeepactuation" TEXT, "upkeepoperation" TEXT, "upkeeprobot" TEXT, "faultcodeval" TEXT, "issuecategoryval" TEXT, "issuelevelval" TEXT, "faultpredscore" REAL, "faulttypeestimation" TEXT, "rulhours" INTEGER, "upkeepduedays" INTEGER, "upkeepcostest" NUMERIC, PRIMARY KEY ("upkeepactuation"));
+
+CREATE TABLE "mechanical_status" ("mechactref" TEXT, "mechoperref" TEXT, "mechdetref" TEXT, "brk1statval" TEXT, "brk2statval" TEXT, "brk3statval" TEXT, "brk4statval" TEXT, "brk5statval" TEXT, "brk6statval" TEXT, "enc1statval" TEXT, "enc2statval" TEXT, "enc3statval" TEXT, "enc4statval" TEXT, "enc5statval" TEXT, "enc6statval" TEXT, "gb1tempval" NUMERIC, "gb2tempval" REAL, "gb3tempval" REAL, "gb4tempval" NUMERIC, "gb5tempval" REAL, "gb6tempval" REAL, "gb1vibval" NUMERIC, "gb2vibval" REAL, "gb3vibval" REAL, "gb4vibval" NUMERIC, "gb5vibval" REAL, "gb6vibval" REAL);
+
+CREATE TABLE "operation" ("operreg" TEXT, "operbotdetref" TEXT, "operrecref" TEXT, "totopshrval" NUMERIC, "apptypeval" TEXT, "opermodeval" TEXT, "currprogval" TEXT, "progcyclecount" INTEGER, "cycletimesecval" NUMERIC, "axiscountval" INTEGER, PRIMARY KEY ("operreg"));
+
+CREATE TABLE "performance_and_safety" ("effectivenessactuation" TEXT, "effectivenessoperation" TEXT, "effectivenessrobot" TEXT, "conditionindexval" NUMERIC, "effectivenessindexval" NUMERIC, "qualitymeasureval" REAL, "energyusekwhval" NUMERIC, "pwrfactorval" REAL, "airpressval" NUMERIC, "toolchangecount" INTEGER, "toolwearpct" REAL, "safety_metrics" TEXT, PRIMARY KEY ("effectivenessactuation"));
+
+CREATE TABLE "robot_details" ("botdetreg" TEXT, "mfgnameval" TEXT, "modelseriesval" TEXT, "bottypeval" TEXT, "payloadcapkg" NUMERIC, "reachmmval" INTEGER, "instdateval" TEXT, "fwversionval" TEXT, "ctrltypeval" TEXT, PRIMARY KEY ("botdetreg"));
+
+CREATE TABLE "robot_record" ("recreg" TEXT, "rects" TEXT NOT NULL, "botcode" TEXT NOT NULL, PRIMARY KEY ("recreg"));
+
+CREATE TABLE "system_controller" ("systemoverseeractuation" TEXT, "systemoverseeroperation" TEXT, "systemoverseerrobot" TEXT, "controller_metrics" TEXT, PRIMARY KEY ("systemoverseeractuation"));

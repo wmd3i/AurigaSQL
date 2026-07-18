@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import json
 import os
 import time
 from typing import Any
@@ -35,7 +34,6 @@ class LiteLLMConnector(LLMConnector):
         self.router: Router | None = None
         self.router_entry_model: str | None = None
 
-        # If the model is a router config, use the router
         if has_model_config(config.model):
             router_cfg = rewrite_model_config_base_urls(
                 get_model_config(config.model),
@@ -51,7 +49,6 @@ class LiteLLMConnector(LLMConnector):
             logger.info("llm_connector_initialized mode=router model=%s entry=%s", config.model, self.router_entry_model)
             return
         else:
-            # Otherwise, use the regular LiteLLM API
             api_key = os.getenv(config.api_key_env)
             if not api_key:
                 raise RuntimeError(f"Missing environment variable: {config.api_key_env}")
@@ -61,7 +58,6 @@ class LiteLLMConnector(LLMConnector):
     def complete(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> LLMResponse:
         max_attempts = max(1, self.config.max_retries + 1)
         logger.info("llm_invocation_started provider=%s model=%s message_count=%d tool_count=%d max_retries=%d", self.provider_name, self.model_name, len(messages), len(tools or []), self.config.max_retries)
-        logger.info("llm_prompt messages=%s", self._format_log_value(messages))
         t0 = time.monotonic()
         response = self._complete_with_retries(messages, tools, max_attempts, t0)
         return self._build_llm_response(response, t0)
@@ -138,7 +134,6 @@ class LiteLLMConnector(LLMConnector):
         tool_calls = raw_message_dict.get("tool_calls") or []
         logger.info("llm_invocation_finished provider=%s model=%s duration_secs=%.2f finish_reason=%s content_chars=%d tool_call_count=%d prompt_tokens=%s completion_tokens=%s total_tokens=%s", self.provider_name, self.model_name, time.monotonic() - invocation_started_at, response.choices[0].finish_reason, len(message.content or ""), len(tool_calls), getattr(usage, "prompt_tokens", None) if usage else None, getattr(usage, "completion_tokens", None) if usage else None, getattr(usage, "total_tokens", None) if usage else None)
         raw_response = response.model_dump()
-        logger.info("llm_response provider=%s model=%s raw_response=%s", self.provider_name, self.model_name, self._format_log_value(raw_response))
         llm_response = LLMResponse(
             content=message.content or "",
             finish_reason=response.choices[0].finish_reason,
@@ -153,10 +148,6 @@ class LiteLLMConnector(LLMConnector):
             raw_response=raw_response,
         )
         return llm_response
-
-    @staticmethod
-    def _format_log_value(value: Any) -> str:
-        return json.dumps(value, ensure_ascii=False, default=str).replace("\n", "\\n").replace("\r", "\\r")
 
     def _log_retry_scheduled(self, retry_state: Any) -> None:
         sleep_secs = retry_state.next_action.sleep if retry_state.next_action else 0

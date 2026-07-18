@@ -1,0 +1,15 @@
+CREATE TABLE "articles" ("artkey" INTEGER, "catlabel" TEXT, "subcatlbl" TEXT, "pubtime" TEXT, "authname" TEXT, "srcref" TEXT, "wordlen" INTEGER, "readsec" INTEGER, "difflevel" TEXT, "freshscore" NUMERIC, "qualscore" NUMERIC, "sentscore" NUMERIC, "contrscore" NUMERIC, "tagset" TEXT, "conttype" TEXT, "contformat" TEXT, "accscore" NUMERIC, "mediacount" INTEGER, "vidsec" INTEGER, "paywall" TEXT, "authref" INTEGER, "engagement_metrics" TEXT, PRIMARY KEY ("artkey"));
+
+CREATE TABLE "devices" ("devkey" INTEGER, "devtype" TEXT, "brwtype" TEXT, "osver" TEXT, "appver" TEXT, "scrres" TEXT, "vpsize" TEXT, "conntype" TEXT, "netspd" NUMERIC, "uselink" INTEGER, PRIMARY KEY ("devkey"));
+
+CREATE TABLE "interactionmetrics" ("intmetkey" INTEGER, "interaction_behavior" TEXT, PRIMARY KEY ("intmetkey"));
+
+CREATE TABLE "interactions" ("intkey" INTEGER, "seshlink2" INTEGER, "reclink" INTEGER, "artval" INTEGER, "intts" TEXT, "evttype" TEXT, "seqval" INTEGER, "agentval" TEXT, "clkts" TEXT, "clkpos" TEXT, "clktype" TEXT, "clksrc" TEXT, "clkctx" TEXT, "inttype" TEXT, PRIMARY KEY ("intkey"));
+
+CREATE TABLE "recommendations" ("reckey" INTEGER, "alglabel" TEXT, "stratlabel" TEXT, "posval" INTEGER, "recpage" TEXT, "recsec" TEXT, "recscore" NUMERIC, "confval" NUMERIC, "divval" NUMERIC, "novval" NUMERIC, "seryval" NUMERIC, "artlink" INTEGER, PRIMARY KEY ("reckey"));
+
+CREATE TABLE "sessions" ("seshkey" INTEGER, "userel" INTEGER, "devrel" INTEGER, "seshstart" TEXT, "seshdur" INTEGER, "seshviews" INTEGER, "bncrate" NUMERIC, "seshdepth" INTEGER, "engscore" NUMERIC, "seshrecs" INTEGER, "seshclicks" INTEGER, "ctrval" NUMERIC, "langcode" TEXT, "tzoffset" TEXT, "ipaddr" TEXT, "geoctry" TEXT, "georeg" TEXT, "geocity" TEXT, "expref" TEXT, "persver" TEXT, "recset" TEXT, "relscore" NUMERIC, "persacc" NUMERIC, "recutil" NUMERIC, PRIMARY KEY ("seshkey"));
+
+CREATE TABLE "systemperformance" ("rectrace" INTEGER, "perfts" TEXT, "resptime" INTEGER, "loadscore" NUMERIC, "errcount" TEXT, "warncount" INTEGER, "perfscore" NUMERIC, "cachestate" TEXT, "apiver" TEXT, "cliver" TEXT, "featset" TEXT, "devlink" INTEGER, "seshlink" INTEGER, PRIMARY KEY ("rectrace"));
+
+CREATE TABLE "users" ("userkey" INTEGER, "regmoment" TEXT, "typelabel" TEXT, "seglabel" TEXT, "substatus" TEXT, "subdays" INTEGER, "ageval" INTEGER, "gendlbl" TEXT, "occulbl" TEXT, "testgrp" TEXT, "user_preferences" TEXT, PRIMARY KEY ("userkey"));
