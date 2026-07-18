@@ -1,5 +1,4 @@
 from .base import LLMConnector, LLMResponse, UsageStats
-from .litellm_connector import LiteLLMConnector
 
 __all__ = [
     "LLMConnector",
@@ -7,3 +6,11 @@ __all__ = [
     "LiteLLMConnector",
     "UsageStats",
 ]
+
+
+def __getattr__(name: str):
+    if name == "LiteLLMConnector":
+        from .litellm_connector import LiteLLMConnector
+
+        return LiteLLMConnector
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

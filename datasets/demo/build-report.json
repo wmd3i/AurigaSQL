@@ -1,0 +1,713 @@
+{
+  "version": 1,
+  "bird": [
+    {
+      "database": "california_schools",
+      "table_count": 3,
+      "row_count": 29941,
+      "tables": [
+        {
+          "table": "frpm",
+          "rows": 9986
+        },
+        {
+          "table": "satscores",
+          "rows": 2269
+        },
+        {
+          "table": "schools",
+          "rows": 17686
+        }
+      ],
+      "size_bytes": 11116544
+    },
+    {
+      "database": "financial",
+      "table_count": 8,
+      "row_count": 1079680,
+      "tables": [
+        {
+          "table": "account",
+          "rows": 4500
+        },
+        {
+          "table": "card",
+          "rows": 892
+        },
+        {
+          "table": "client",
+          "rows": 5369
+        },
+        {
+          "table": "disp",
+          "rows": 5369
+        },
+        {
+          "table": "district",
+          "rows": 77
+        },
+        {
+          "table": "loan",
+          "rows": 682
+        },
+        {
+          "table": "order",
+          "rows": 6471
+        },
+        {
+          "table": "trans",
+          "rows": 1056320
+        }
+      ],
+      "size_bytes": 71294976
+    },
+    {
+      "database": "formula_1",
+      "table_count": 13,
+      "row_count": 514287,
+      "tables": [
+        {
+          "table": "circuits",
+          "rows": 72
+        },
+        {
+          "table": "constructorResults",
+          "rows": 11082
+        },
+        {
+          "table": "constructorStandings",
+          "rows": 11836
+        },
+        {
+          "table": "constructors",
+          "rows": 208
+        },
+        {
+          "table": "driverStandings",
+          "rows": 31578
+        },
+        {
+          "table": "drivers",
+          "rows": 840
+        },
+        {
+          "table": "lapTimes",
+          "rows": 420369
+        },
+        {
+          "table": "pitStops",
+          "rows": 6070
+        },
+        {
+          "table": "qualifying",
+          "rows": 7397
+        },
+        {
+          "table": "races",
+          "rows": 976
+        },
+        {
+          "table": "results",
+          "rows": 23657
+        },
+        {
+          "table": "seasons",
+          "rows": 68
+        },
+        {
+          "table": "status",
+          "rows": 134
+        }
+      ],
+      "size_bytes": 22360064
+    },
+    {
+      "database": "student_club",
+      "table_count": 8,
+      "row_count": 42511,
+      "tables": [
+        {
+          "table": "attendance",
+          "rows": 326
+        },
+        {
+          "table": "budget",
+          "rows": 52
+        },
+        {
+          "table": "event",
+          "rows": 42
+        },
+        {
+          "table": "expense",
+          "rows": 32
+        },
+        {
+          "table": "income",
+          "rows": 36
+        },
+        {
+          "table": "major",
+          "rows": 113
+        },
+        {
+          "table": "member",
+          "rows": 33
+        },
+        {
+          "table": "zip_code",
+          "rows": 41877
+        }
+      ],
+      "size_bytes": 2641920
+    },
+    {
+      "database": "superhero",
+      "table_count": 10,
+      "row_count": 10614,
+      "tables": [
+        {
+          "table": "alignment",
+          "rows": 4
+        },
+        {
+          "table": "attribute",
+          "rows": 6
+        },
+        {
+          "table": "colour",
+          "rows": 35
+        },
+        {
+          "table": "gender",
+          "rows": 3
+        },
+        {
+          "table": "hero_attribute",
+          "rows": 3738
+        },
+        {
+          "table": "hero_power",
+          "rows": 5825
+        },
+        {
+          "table": "publisher",
+          "rows": 25
+        },
+        {
+          "table": "race",
+          "rows": 61
+        },
+        {
+          "table": "superhero",
+          "rows": 750
+        },
+        {
+          "table": "superpower",
+          "rows": 167
+        }
+      ],
+      "size_bytes": 237568
+    },
+    {
+      "database": "toxicology",
+      "table_count": 4,
+      "row_count": 49813,
+      "tables": [
+        {
+          "table": "atom",
+          "rows": 12333
+        },
+        {
+          "table": "bond",
+          "rows": 12379
+        },
+        {
+          "table": "connected",
+          "rows": 24758
+        },
+        {
+          "table": "molecule",
+          "rows": 343
+        }
+      ],
+      "size_bytes": 2678784
+    }
+  ],
+  "bird_interact": [
+    {
+      "database": "credit",
+      "tables": [
+        {
+          "table": "bank_and_transactions",
+          "columns": 15,
+          "rows": 1000,
+          "primary_key": [
+            "bankexpref"
+          ]
+        },
+        {
+          "table": "core_record",
+          "columns": 26,
+          "rows": 1000,
+          "primary_key": [
+            "coreregistry"
+          ]
+        },
+        {
+          "table": "credit_accounts_and_history",
+          "columns": 21,
+          "rows": 1000,
+          "primary_key": [
+            "histcompref"
+          ]
+        },
+        {
+          "table": "credit_and_compliance",
+          "columns": 21,
+          "rows": 1000,
+          "primary_key": [
+            "compbankref"
+          ]
+        },
+        {
+          "table": "employment_and_income",
+          "columns": 21,
+          "rows": 1000,
+          "primary_key": [
+            "emplcoreref"
+          ]
+        },
+        {
+          "table": "expenses_and_assets",
+          "columns": 16,
+          "rows": 1000,
+          "primary_key": [
+            "expemplref"
+          ]
+        }
+      ],
+      "table_count": 6,
+      "row_count": 6000,
+      "size_bytes": 1298432
+    },
+    {
+      "database": "museum",
+      "tables": [
+        {
+          "table": "airqualityreadings",
+          "columns": 12,
+          "rows": 951,
+          "primary_key": [
+            "aqrecordregistry"
+          ]
+        },
+        {
+          "table": "artifactratings",
+          "columns": 12,
+          "rows": 951,
+          "primary_key": [
+            "ratingrecordregistry"
+          ]
+        },
+        {
+          "table": "artifactscore",
+          "columns": 6,
+          "rows": 951,
+          "primary_key": [
+            "artregistry"
+          ]
+        },
+        {
+          "table": "artifactsecurityaccess",
+          "columns": 13,
+          "rows": 951,
+          "primary_key": [
+            "secrecordregistry"
+          ]
+        },
+        {
+          "table": "conditionassessments",
+          "columns": 7,
+          "rows": 951,
+          "primary_key": [
+            "conditionassessregistry"
+          ]
+        },
+        {
+          "table": "conservationandmaintenance",
+          "columns": 20,
+          "rows": 951,
+          "primary_key": [
+            "conservemaintregistry"
+          ]
+        },
+        {
+          "table": "environmentalreadingscore",
+          "columns": 9,
+          "rows": 951,
+          "primary_key": [
+            "envreadregistry"
+          ]
+        },
+        {
+          "table": "exhibitionhalls",
+          "columns": 9,
+          "rows": 951,
+          "primary_key": [
+            "hallrecord"
+          ]
+        },
+        {
+          "table": "lightandradiationreadings",
+          "columns": 6,
+          "rows": 951,
+          "primary_key": [
+            "lightradregistry"
+          ]
+        },
+        {
+          "table": "riskassessments",
+          "columns": 8,
+          "rows": 951,
+          "primary_key": [
+            "riskassessregistry"
+          ]
+        },
+        {
+          "table": "sensitivitydata",
+          "columns": 13,
+          "rows": 951,
+          "primary_key": [
+            "sensitivityregistry"
+          ]
+        },
+        {
+          "table": "showcases",
+          "columns": 17,
+          "rows": 951,
+          "primary_key": [
+            "showcasereg"
+          ]
+        },
+        {
+          "table": "surfaceandphysicalreadings",
+          "columns": 27,
+          "rows": 951,
+          "primary_key": [
+            "surfphysregistry"
+          ]
+        },
+        {
+          "table": "usagerecords",
+          "columns": 26,
+          "rows": 951,
+          "primary_key": [
+            "usagerecordregistry"
+          ]
+        }
+      ],
+      "table_count": 14,
+      "row_count": 13314,
+      "size_bytes": 1802240
+    },
+    {
+      "database": "gaming",
+      "tables": [
+        {
+          "table": "audioandmedia",
+          "columns": 24,
+          "rows": 1000,
+          "primary_key": [
+            "audregistry"
+          ]
+        },
+        {
+          "table": "deviceidentity",
+          "columns": 22,
+          "rows": 1000,
+          "primary_key": [
+            "devregistry"
+          ]
+        },
+        {
+          "table": "interactionandcontrol",
+          "columns": 21,
+          "rows": 1000,
+          "primary_key": [
+            "interactregistry"
+          ]
+        },
+        {
+          "table": "mechanical",
+          "columns": 25,
+          "rows": 1000,
+          "primary_key": [
+            "mechregistry"
+          ]
+        },
+        {
+          "table": "performance",
+          "columns": 12,
+          "rows": 1000,
+          "primary_key": [
+            "perfregistry"
+          ]
+        },
+        {
+          "table": "physicaldurability",
+          "columns": 27,
+          "rows": 1000,
+          "primary_key": [
+            "physregistry"
+          ]
+        },
+        {
+          "table": "rgb",
+          "columns": 9,
+          "rows": 1000,
+          "primary_key": [
+            "rgbregistry"
+          ]
+        },
+        {
+          "table": "testsessions",
+          "columns": 20,
+          "rows": 1000,
+          "primary_key": [
+            "sessionregistry"
+          ]
+        }
+      ],
+      "table_count": 8,
+      "row_count": 8000,
+      "size_bytes": 1388544
+    },
+    {
+      "database": "news",
+      "tables": [
+        {
+          "table": "articles",
+          "columns": 22,
+          "rows": 1000,
+          "primary_key": [
+            "artkey"
+          ]
+        },
+        {
+          "table": "devices",
+          "columns": 10,
+          "rows": 993,
+          "primary_key": [
+            "devkey"
+          ]
+        },
+        {
+          "table": "interactionmetrics",
+          "columns": 2,
+          "rows": 1000,
+          "primary_key": [
+            "intmetkey"
+          ]
+        },
+        {
+          "table": "interactions",
+          "columns": 14,
+          "rows": 1000,
+          "primary_key": [
+            "intkey"
+          ]
+        },
+        {
+          "table": "recommendations",
+          "columns": 12,
+          "rows": 999,
+          "primary_key": [
+            "reckey"
+          ]
+        },
+        {
+          "table": "sessions",
+          "columns": 24,
+          "rows": 1000,
+          "primary_key": [
+            "seshkey"
+          ]
+        },
+        {
+          "table": "systemperformance",
+          "columns": 13,
+          "rows": 1000,
+          "primary_key": [
+            "rectrace"
+          ]
+        },
+        {
+          "table": "users",
+          "columns": 11,
+          "rows": 994,
+          "primary_key": [
+            "userkey"
+          ]
+        }
+      ],
+      "table_count": 8,
+      "row_count": 7986,
+      "size_bytes": 1572864
+    },
+    {
+      "database": "robot",
+      "tables": [
+        {
+          "table": "actuation_data",
+          "columns": 29,
+          "rows": 1000,
+          "primary_key": [
+            "actreg"
+          ]
+        },
+        {
+          "table": "joint_condition",
+          "columns": 21,
+          "rows": 1000,
+          "primary_key": []
+        },
+        {
+          "table": "joint_performance",
+          "columns": 4,
+          "rows": 1000,
+          "primary_key": []
+        },
+        {
+          "table": "maintenance_and_fault",
+          "columns": 11,
+          "rows": 1000,
+          "primary_key": [
+            "upkeepactuation"
+          ]
+        },
+        {
+          "table": "mechanical_status",
+          "columns": 27,
+          "rows": 1000,
+          "primary_key": []
+        },
+        {
+          "table": "operation",
+          "columns": 10,
+          "rows": 1000,
+          "primary_key": [
+            "operreg"
+          ]
+        },
+        {
+          "table": "performance_and_safety",
+          "columns": 12,
+          "rows": 1000,
+          "primary_key": [
+            "effectivenessactuation"
+          ]
+        },
+        {
+          "table": "robot_details",
+          "columns": 9,
+          "rows": 1000,
+          "primary_key": [
+            "botdetreg"
+          ]
+        },
+        {
+          "table": "robot_record",
+          "columns": 3,
+          "rows": 1000,
+          "primary_key": [
+            "recreg"
+          ]
+        },
+        {
+          "table": "system_controller",
+          "columns": 4,
+          "rows": 1000,
+          "primary_key": [
+            "systemoverseeractuation"
+          ]
+        }
+      ],
+      "table_count": 10,
+      "row_count": 10000,
+      "size_bytes": 2129920
+    },
+    {
+      "database": "solar",
+      "tables": [
+        {
+          "table": "alerts",
+          "columns": 10,
+          "rows": 1000,
+          "primary_key": [
+            "alertreg"
+          ]
+        },
+        {
+          "table": "electrical",
+          "columns": 15,
+          "rows": 1000,
+          "primary_key": [
+            "elecregistry"
+          ]
+        },
+        {
+          "table": "environment",
+          "columns": 18,
+          "rows": 1000,
+          "primary_key": [
+            "envregistry"
+          ]
+        },
+        {
+          "table": "inverter",
+          "columns": 8,
+          "rows": 1000,
+          "primary_key": [
+            "invertregistry"
+          ]
+        },
+        {
+          "table": "maintenance",
+          "columns": 14,
+          "rows": 1000,
+          "primary_key": [
+            "maintregistry"
+          ]
+        },
+        {
+          "table": "panel",
+          "columns": 9,
+          "rows": 1000,
+          "primary_key": [
+            "panemark"
+          ]
+        },
+        {
+          "table": "performance",
+          "columns": 6,
+          "rows": 1000,
+          "primary_key": [
+            "perfregistry"
+          ]
+        },
+        {
+          "table": "plant",
+          "columns": 4,
+          "rows": 1000,
+          "primary_key": [
+            "growregistry"
+          ]
+        }
+      ],
+      "table_count": 8,
+      "row_count": 8000,
+      "size_bytes": 2207744
+    }
+  ]
+}

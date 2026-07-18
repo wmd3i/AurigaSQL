@@ -1,0 +1,2 @@
+# Desktop backend packaging
+pyinstaller>=6.0.0

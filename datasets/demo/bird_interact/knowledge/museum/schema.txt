@@ -1,0 +1,27 @@
+CREATE TABLE "airqualityreadings" ("aqrecordregistry" INTEGER, "envreadref" INTEGER NOT NULL, "co2ppm" INTEGER, "tvocppb" INTEGER, "ozoneppb" INTEGER, "so2ppb" INTEGER, "no2ppb" INTEGER, "pm25conc" REAL, "pm10conc" NUMERIC, "hchoconc" NUMERIC, "airexrate" NUMERIC, "airvelms" NUMERIC, PRIMARY KEY ("aqrecordregistry"));
+
+CREATE TABLE "artifactratings" ("ratingrecordregistry" INTEGER, "artref" TEXT NOT NULL, "histsignrating" INTEGER, "researchvalrating" INTEGER, "exhibitvalrating" INTEGER, "cultscore" INTEGER, "publicaccessrating" INTEGER, "eduvaluerating" INTEGER, "conservediff" TEXT, "treatcomplexity" TEXT, "matstability" TEXT, "deteriorrate" TEXT, PRIMARY KEY ("ratingrecordregistry"));
+
+CREATE TABLE "artifactscore" ("artregistry" TEXT, "artname" TEXT NOT NULL, "artdynasty" TEXT, "artageyears" INTEGER, "mattype" TEXT, "conservestatus" TEXT, PRIMARY KEY ("artregistry"));
+
+CREATE TABLE "artifactsecurityaccess" ("secrecordregistry" INTEGER, "artref" TEXT NOT NULL, "ratingref" INTEGER, "loanstatus" TEXT, "insvalueusd" NUMERIC, "seclevel" TEXT, "accessrestrictions" TEXT, "docustatus" TEXT, "photodocu" TEXT, "condreportstatus" TEXT, "conserverecstatus" TEXT, "researchaccessstatus" TEXT, "digitalrecstatus" TEXT, PRIMARY KEY ("secrecordregistry"));
+
+CREATE TABLE "conditionassessments" ("conditionassessregistry" INTEGER, "artrefexamined" TEXT NOT NULL, "showcaserefexamined" TEXT, "lightreadrefobserved" INTEGER, "condassessscore" INTEGER, "conserveassessdate" TEXT, "nextassessdue" TEXT, PRIMARY KEY ("conditionassessregistry"));
+
+CREATE TABLE "conservationandmaintenance" ("conservemaintregistry" INTEGER, "artrefmaintained" TEXT NOT NULL, "hallrefmaintained" TEXT, "surfreadrefobserved" INTEGER, "conservetreatstatus" TEXT, "treatpriority" TEXT, "lastcleaningdate" TEXT, "nextcleaningdue" TEXT, "cleanintervaldays" INTEGER, "maintlog" TEXT, "incidentreportstatus" TEXT, "emergencydrillstatus" TEXT, "stafftrainstatus" TEXT, "budgetallocstatus" TEXT, "maintbudgetstatus" TEXT, "conservefreq" TEXT, "intervhistory" TEXT, "prevtreatments" INTEGER, "treateffectiveness" TEXT, "reversibilitypotential" TEXT, PRIMARY KEY ("conservemaintregistry"));
+
+CREATE TABLE "environmentalreadingscore" ("envreadregistry" INTEGER, "monitorcode" TEXT NOT NULL, "readtimestamp" TEXT NOT NULL, "showcaseref" TEXT, "tempc" INTEGER, "tempvar24h" REAL, "relhumidity" INTEGER, "humvar24h" INTEGER, "airpresshpa" REAL, PRIMARY KEY ("envreadregistry"));
+
+CREATE TABLE "exhibitionhalls" ("hallrecord" TEXT, "cctvcoverage" TEXT, "motiondetectstatus" TEXT, "alarmsysstatus" TEXT, "accessctrlstatus" TEXT, "visitorcountdaily" INTEGER, "visitorflowrate" TEXT, "visitordwellmin" INTEGER, "visitorbehaviornotes" TEXT, PRIMARY KEY ("hallrecord"));
+
+CREATE TABLE "lightandradiationreadings" ("lightradregistry" INTEGER, "envreadref" INTEGER NOT NULL, "lightlux" INTEGER, "uvuwcm2" NUMERIC, "irwm2" NUMERIC, "visibleexplxh" INTEGER, PRIMARY KEY ("lightradregistry"));
+
+CREATE TABLE "riskassessments" ("riskassessregistry" INTEGER, "artrefconcerned" TEXT NOT NULL, "hallrefconcerned" TEXT, "riskassesslevel" TEXT, "emergresponseplan" TEXT, "evacpriority" TEXT, "handlerestrictions" TEXT, "conservepriorityscore" INTEGER, PRIMARY KEY ("riskassessregistry"));
+
+CREATE TABLE "sensitivitydata" ("sensitivityregistry" INTEGER, "artref" TEXT NOT NULL, "envsensitivity" TEXT, "lightsensitivity" TEXT, "tempsensitivity" TEXT, "humiditysensitivity" TEXT, "vibrasensitivity" TEXT, "pollutantsensitivity" TEXT, "pestsensitivity" TEXT, "handlesensitivity" TEXT, "transportsensitivity" TEXT, "displaysensitivity" TEXT, "storagesensitivity" TEXT, PRIMARY KEY ("sensitivityregistry"));
+
+CREATE TABLE "showcases" ("showcasereg" TEXT, "hallref" TEXT, "airtightness" REAL, "showcasematerial" TEXT, "sealcondition" TEXT, "maintstatus" TEXT, "filterstatus" TEXT, "silicagelstatus" TEXT, "silicagelchangedate" TEXT, "humiditybuffercap" INTEGER, "pollutantabsorbcap" NUMERIC, "leakrate" REAL, "pressurepa" INTEGER, "inertgassysstatus" TEXT, "firesuppresssys" TEXT, "empowerstatus" TEXT, "backupsysstatus" TEXT, PRIMARY KEY ("showcasereg"));
+
+CREATE TABLE "surfaceandphysicalreadings" ("surfphysregistry" INTEGER, "envreadref" INTEGER NOT NULL, "vibralvlmms2" REAL, "noisedb" INTEGER, "dustaccummgm2" NUMERIC, "microbialcountcfu" INTEGER, "moldriskidx" NUMERIC, "pestactivitylvl" TEXT, "pesttrapcount" INTEGER, "pestspeciesdetected" TEXT, "surfaceph" NUMERIC, "matmoistcontent" NUMERIC, "saltcrystalrisk" TEXT, "metalcorroderate" NUMERIC, "organicdegradidx" NUMERIC, "colorchangedeltae" REAL, "surfacetempc" NUMERIC, "surfacerh" NUMERIC, "condenserisk" TEXT, "thermalimgstatus" TEXT, "structstability" TEXT, "crackmonitor" TEXT, "deformmm" NUMERIC, "wtchangepct" NUMERIC, "surfdustcoverage" INTEGER, "o2concentration" NUMERIC, "n2concentration" NUMERIC, PRIMARY KEY ("surfphysregistry"));
+
+CREATE TABLE "usagerecords" ("usagerecordregistry" INTEGER, "artrefused" TEXT NOT NULL, "showcaserefused" TEXT, "sensdatalink" INTEGER, "displayrotatesched" TEXT, "displaydurmonths" INTEGER, "restperiodmonths" INTEGER, "displayreqs" TEXT, "storagereqs" TEXT, "handlingreqs" TEXT, "transportreqs" TEXT, "packingreqs" TEXT, "resaccessfreq" TEXT, "publicdispfreq" TEXT, "loanfreq" TEXT, "handlefreq" TEXT, "docufreq" TEXT, "monitorfreq" TEXT, "assessfreq" TEXT, "maintfreq" TEXT, "inspectfreq" TEXT, "calibfreq" TEXT, "certstatus" TEXT, "compliancestatus" TEXT, "auditstatus" TEXT, "qualityctrlstatus" TEXT, PRIMARY KEY ("usagerecordregistry"));

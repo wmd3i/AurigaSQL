@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "california_schools",
+      "display_name": "California Schools",
+      "description": "California school, district, enrollment, and assessment data.",
+      "source_id": "bird:california_schools",
+      "source_group": "bird",
+      "engine": "sqlite",
+      "database": "california_schools",
+      "db_path": "bird/databases/california_schools.sqlite"
+    },
+    {
+      "id": "financial",
+      "display_name": "Financial",
+      "description": "Banking accounts, clients, loans, transactions, and payment data.",
+      "source_id": "bird:financial",
+      "source_group": "bird",
+      "engine": "sqlite",
+      "database": "financial",
+      "db_path": "bird/databases/financial.sqlite"
+    },
+    {
+      "id": "formula_1",
+      "display_name": "Formula 1",
+      "description": "Formula 1 races, circuits, drivers, constructors, lap times, and results.",
+      "source_id": "bird:formula_1",
+      "source_group": "bird",
+      "engine": "sqlite",
+      "database": "formula_1",
+      "db_path": "bird/databases/formula_1.sqlite"
+    },
+    {
+      "id": "student_club",
+      "display_name": "Student Club",
+      "description": "Student club members, events, budgets, expenses, income, and attendance.",
+      "source_id": "bird:student_club",
+      "source_group": "bird",
+      "engine": "sqlite",
+      "database": "student_club",
+      "db_path": "bird/databases/student_club.sqlite"
+    },
+    {
+      "id": "superhero",
+      "display_name": "Superhero",
+      "description": "Superheroes, publishers, powers, attributes, alignments, and character traits.",
+      "source_id": "bird:superhero",
+      "source_group": "bird",
+      "engine": "sqlite",
+      "database": "superhero",
+      "db_path": "bird/databases/superhero.sqlite"
+    },
+    {
+      "id": "toxicology",
+      "display_name": "Toxicology",
+      "description": "Molecules, atoms, bonds, and toxicology labels.",
+      "source_id": "bird:toxicology",
+      "source_group": "bird",
+      "engine": "sqlite",
+      "database": "toxicology",
+      "db_path": "bird/databases/toxicology.sqlite"
+    },
+    {
+      "id": "credit",
+      "display_name": "Credit",
+      "description": "Credit applications, customer finances, risk, and compliance data.",
+      "column_meanings_path": "bird_interact/knowledge/credit/column_meanings.json",
+      "knowledge_path": "bird_interact/knowledge/credit/knowledge.jsonl",
+      "schema_path": "bird_interact/knowledge/credit/schema.txt",
+      "source_id": "bird_interact_a:credit",
+      "source_group": "bird_interact_a",
+      "engine": "sqlite",
+      "database": "credit",
+      "db_path": "bird_interact/databases/credit.sqlite"
+    },
+    {
+      "id": "museum",
+      "display_name": "Museum",
+      "description": "Museum artifacts, exhibitions, conservation, and environmental risk data.",
+      "column_meanings_path": "bird_interact/knowledge/museum/column_meanings.json",
+      "knowledge_path": "bird_interact/knowledge/museum/knowledge.jsonl",
+      "schema_path": "bird_interact/knowledge/museum/schema.txt",
+      "source_id": "bird_interact_a:museum",
+      "source_group": "bird_interact_a",
+      "engine": "sqlite",
+      "database": "museum",
+      "db_path": "bird_interact/databases/museum.sqlite"
+    },
+    {
+      "id": "gaming",
+      "display_name": "Gaming",
+      "description": "Gaming device tests, performance, controls, durability, media, and RGB data.",
+      "column_meanings_path": "bird_interact/knowledge/gaming/column_meanings.json",
+      "knowledge_path": "bird_interact/knowledge/gaming/knowledge.jsonl",
+      "schema_path": "bird_interact/knowledge/gaming/schema.txt",
+      "source_id": "bird_interact_a:gaming",
+      "source_group": "bird_interact_a",
+      "engine": "sqlite",
+      "database": "gaming",
+      "db_path": "bird_interact/databases/gaming.sqlite"
+    },
+    {
+      "id": "news",
+      "display_name": "News",
+      "description": "News users, devices, sessions, articles, recommendations, and interactions.",
+      "column_meanings_path": "bird_interact/knowledge/news/column_meanings.json",
+      "knowledge_path": "bird_interact/knowledge/news/knowledge.jsonl",
+      "schema_path": "bird_interact/knowledge/news/schema.txt",
+      "source_id": "bird_interact_a:news",
+      "source_group": "bird_interact_a",
+      "engine": "sqlite",
+      "database": "news",
+      "db_path": "bird_interact/databases/news.sqlite"
+    },
+    {
+      "id": "robot",
+      "display_name": "Robot",
+      "description": "Robot records, operations, performance, maintenance, faults, and safety data.",
+      "column_meanings_path": "bird_interact/knowledge/robot/column_meanings.json",
+      "knowledge_path": "bird_interact/knowledge/robot/knowledge.jsonl",
+      "schema_path": "bird_interact/knowledge/robot/schema.txt",
+      "source_id": "bird_interact_a:robot",
+      "source_group": "bird_interact_a",
+      "engine": "sqlite",
+      "database": "robot",
+      "db_path": "bird_interact/databases/robot.sqlite"
+    },
+    {
+      "id": "solar",
+      "display_name": "Solar",
+      "description": "Solar plants, panels, inverters, performance, maintenance, environment, and alerts.",
+      "column_meanings_path": "bird_interact/knowledge/solar/column_meanings.json",
+      "knowledge_path": "bird_interact/knowledge/solar/knowledge.jsonl",
+      "schema_path": "bird_interact/knowledge/solar/schema.txt",
+      "source_id": "bird_interact_a:solar",
+      "source_group": "bird_interact_a",
+      "engine": "sqlite",
+      "database": "solar",
+      "db_path": "bird_interact/databases/solar.sqlite"
+    }
+  ]
+}

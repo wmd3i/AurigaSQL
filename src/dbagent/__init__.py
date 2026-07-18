@@ -1,10 +1,8 @@
-"""dbAgent experiment framework."""
+"""Reusable SQL agent core for AurigaSQL."""
 
-from .config import AgentConfig, ConnectorConfig, ExperimentConfig, RunnerConfig
+from .config import AgentConfig, ConnectorConfig
 
 __all__ = [
     "AgentConfig",
     "ConnectorConfig",
-    "ExperimentConfig",
-    "RunnerConfig",
 ]

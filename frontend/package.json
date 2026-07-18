@@ -1,0 +1,133 @@
+{
+    "name": "aurigasql-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "dev:desktop": "concurrently -k -n vite,electron -c cyan,magenta \"npm run dev -- --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "pack:desktop": "npm run pack:desktop:mac-arm64",
+    "pack:desktop:mac-arm64": "npm run build:backend:mac && npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir --mac --arm64 -c.mac.notarize=false",
+    "pack:desktop:win-x64": "npm run build:backend:win && npm run build && electron-builder --dir --win --x64",
+    "dist:desktop": "npm run dist:desktop:mac-arm64",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build:backend:mac": "bash ../backend/packaging/build-macos.sh",
+    "build:backend:win": "powershell -ExecutionPolicy Bypass -File ../backend/packaging/build-windows.ps1",
+    "dist:desktop:mac-arm64": "npm run build:backend:mac && npm run build && electron-builder --mac --arm64",
+    "dist:desktop:win-x64": "npm run build:backend:win && npm run build && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "@lobehub/icons": "^5.10.0",
+    "@xyflow/react": "^12.11.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^2.5.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.3",
+    "electron": "^42.5.1",
+    "electron-builder": "^26.15.3",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^7.0.0",
+    "vitest": "^4.1.8",
+    "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.aurigasql.app",
+    "productName": "AurigaSQL",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "electron-backend",
+        "to": "backend",
+        "filter": [
+          "aurigasql-bff",
+          "aurigasql-bff.exe"
+        ]
+      },
+      {
+        "from": "../datasets/demo",
+        "to": "datasets/demo",
+        "filter": [
+          "**/*",
+          "!**/.DS_Store"
+        ]
+      }
+    ],
+    "extraMetadata": {
+      "dependencies": {}
+    },
+    "npmRebuild": false,
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "electron/assets/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.inherit.plist",
+      "binaries": [
+        "Contents/Resources/backend/aurigasql-bff",
+        "Contents/Resources/llama.cpp/llama-server",
+        "Contents/Resources/llama.cpp/*.dylib"
+      ],
+      "extraResources": [
+        {
+          "from": "vendor/llama.cpp/macos",
+          "to": "llama.cpp",
+          "filter": [
+            "LICENSE",
+            "README.md",
+            "llama-server",
+            "*.dylib",
+            "!**/.DS_Store"
+          ]
+        }
+      ],
+      "notarize": true,
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "extraResources": [
+        {
+          "from": "vendor/llama.cpp/windows-x64",
+          "to": "llama.cpp",
+          "filter": [
+            "LICENSE",
+            "README.md",
+            "llama-server.exe",
+            "*.dll",
+            "!**/.DS_Store"
+          ]
+        }
+      ],
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

@@ -3,13 +3,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import sqlite3
-import subprocess
 import time
 from enum import Enum
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, unquote_plus, urlparse
 
 try:
     import sqlglot
@@ -31,19 +30,12 @@ class DBType(str, Enum):
     SQLITE = "sqlite"
     DUCKDB = "duckdb"
     POSTGRES = "postgres"
+    MYSQL = "mysql"
 
 
 POSTGRES_DSN_ENV = "POSTGRES_DSN"
-MAX_OUTPUT_CHARS = 100000
-_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+MYSQL_DSN_ENV = "MYSQL_DSN"
 SQL_QUERY_TIMEOUT_SECS = 60
-DBT_TIMEOUT_SECS = 300
-DBT_STDOUT_TAIL_CHARS = 4000
-READONLY_ROW_LIMIT = 100
-READONLY_CELL_CHARS = 200
-DBT_NODE_SUCCESS_LIMIT = 20
-DBT_ARTIFACT_HINT_LIMIT = 8
-DBT_ARTIFACT_SUFFIXES = (".duckdb", ".csv", ".parquet", ".json", ".db")
 
 def dump_json(payload: Any) -> str:
     return json.dumps(payload, indent=2, default=str, ensure_ascii=False)
@@ -85,6 +77,11 @@ def _is_postgres_timeout_error(exc: Exception) -> bool:
     return "statement timeout" in str(exc).lower() or "canceling statement due to statement timeout" in str(exc).lower()
 
 
+def _is_mysql_timeout_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "max_execution_time" in text or "query execution was interrupted" in text or "timeout" in text
+
+
 def _ensure_db_file(db_path: str) -> Path | None:
     path = Path(db_path)
     return path if path.is_file() else None
@@ -96,36 +93,20 @@ def _nice_table(column_names: list[str], values: list[tuple]) -> str:
     return "\n".join(lines)
 
 
-def _truncate_preview_value(value: Any) -> Any:
-    if value is None:
-        return None
-    if isinstance(value, (int, float, bool)):
-        return value
-    text = str(value)
-    if len(text) <= READONLY_CELL_CHARS:
-        return text
-    return text[:READONLY_CELL_CHARS] + "...[truncated]"
-
-
 def _format_readonly_rows(columns: list[str], rows: list[tuple]) -> list[dict[str, Any]]:
-    return [
-        {column: _truncate_preview_value(value) for column, value in zip(columns, row)}
-        for row in rows
-    ]
+    return [{column: value for column, value in zip(columns, row)} for row in rows]
 
 
-def _readonly_payload(dialect: str, query: str, columns: list[str], rows: list[tuple], truncated: bool) -> str:
+def _readonly_payload(dialect: str, query: str, columns: list[str], rows: list[tuple]) -> str:
     payload: dict[str, Any] = {
         "dialect": dialect,
         "query": query,
         "columns": columns,
         "returned_rows": len(rows),
-        "row_count": None if truncated else len(rows),
-        "truncated": truncated,
+        "row_count": len(rows),
+        "truncated": False,
         "rows": _format_readonly_rows(columns, rows),
     }
-    if truncated:
-        payload["limit"] = READONLY_ROW_LIMIT
     return dump_json(payload)
 
 
@@ -217,6 +198,15 @@ def _validate_readonly_sql(sql_text: str) -> tuple[bool, str]:
     query = sql_text.strip().rstrip(";")
     if not query:
         return False, "Error: Empty SQL query"
+    return True, query
+
+
+def _validate_select_like_sql(sql_text: str) -> tuple[bool, str]:
+    ok, query = _validate_readonly_sql(sql_text)
+    if not ok:
+        return ok, query
+    if not re.match(r"^(select|with|explain|show)\b", query, re.IGNORECASE):
+        return False, "Error: Only SELECT, WITH, EXPLAIN, or SHOW queries are allowed"
     return True, query
 
 
@@ -321,174 +311,11 @@ def run_duckdb_readonly(db_path: str, sql_text: str) -> str:
         return query
     try:
         with _connect_duckdb_readonly(db_path) as conn:
-            rows = conn.execute(query).fetchmany(READONLY_ROW_LIMIT + 1)
+            rows = conn.execute(query).fetchall()
             columns = [description[0] for description in conn.description] if conn.description else []
-        truncated = len(rows) > READONLY_ROW_LIMIT
-        if truncated:
-            rows = rows[:READONLY_ROW_LIMIT]
-        return _readonly_payload("duckdb", query, columns, rows, truncated)
+        return _readonly_payload("duckdb", query, columns, rows)
     except Exception as exc:
         return f"Error executing DuckDB SQL: {exc}"
-
-
-def run_bash(command: str, workdir: Path) -> str:
-    dangerous = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"]
-    if any(item in command for item in dangerous):
-        return "Error: Dangerous command blocked"
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            cwd=workdir,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired:
-        return "Error: Timeout (120s)"
-
-    output = _ANSI_ESCAPE.sub("", (result.stdout + result.stderr)).strip()
-    return output[:MAX_OUTPUT_CHARS] if output else "(no output)"
-
-def _dbt_node_summary(
-    workdir: Path,
-    previous_mtimes: dict[Path, float] | None = None,
-) -> tuple[list[dict[str, Any]] | None, Path | None, float | None]:
-    """Parse a fresh target/run_results.json into a compact per-node status list.
-
-    Returns ``(nodes, path, mtime)``. When ``previous_mtimes`` is provided, only
-    files that are new or have a newer mtime than the pre-run snapshot count as
-    current for this invocation.
-    """
-    candidates: list[tuple[Path, float]] = []
-    for path in workdir.rglob("target/run_results.json"):
-        try:
-            mtime = path.stat().st_mtime
-        except OSError:
-            continue
-        previous_mtime = previous_mtimes.get(path) if previous_mtimes is not None else None
-        if previous_mtimes is not None and previous_mtime is not None and mtime <= previous_mtime:
-            continue
-        candidates.append((path, mtime))
-    candidates.sort(key=lambda item: item[1], reverse=True)
-    if not candidates:
-        return None, None, None
-    path, mtime = candidates[0]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None, path, mtime
-    nodes: list[dict[str, Any]] = []
-    for r in data.get("results", []):
-        unique_id = r.get("unique_id") or ""
-        node: dict[str, Any] = {
-            "name": unique_id.split(".")[-1] or unique_id,
-            "status": r.get("status"),
-        }
-        message = r.get("message")
-        if message:
-            node["message"] = str(message)[:300]
-        adapter = r.get("adapter_response") or {}
-        if adapter.get("rows_affected") is not None:
-            node["rows"] = adapter["rows_affected"]
-        nodes.append(node)
-    return nodes, path, mtime
-
-
-def _dbt_status_counts(nodes: list[dict[str, Any]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for node in nodes:
-        status = str(node.get("status") or "unknown")
-        counts[status] = counts.get(status, 0) + 1
-    return dict(sorted(counts.items()))
-
-
-def _dbt_sort_and_cap_nodes(nodes: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
-    failing_statuses = {"error", "fail", "failed"}
-    failing_nodes = [node for node in nodes if str(node.get("status") or "").lower() in failing_statuses]
-    other_nodes = [node for node in nodes if str(node.get("status") or "").lower() not in failing_statuses]
-    ordered_nodes = failing_nodes + other_nodes[:DBT_NODE_SUCCESS_LIMIT]
-    truncated = len(ordered_nodes) < len(nodes)
-    return ordered_nodes, truncated
-
-
-def _collect_recent_artifact_hints(workdir: Path, start_time: float) -> list[str]:
-    hints: list[tuple[float, Path]] = []
-    for path in workdir.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in DBT_ARTIFACT_SUFFIXES:
-            continue
-        try:
-            mtime = path.stat().st_mtime
-        except OSError:
-            continue
-        if mtime < start_time:
-            continue
-        hints.append((mtime, path))
-    hints.sort(key=lambda item: item[0], reverse=True)
-    return [str(path.relative_to(workdir)) for _, path in hints[:DBT_ARTIFACT_HINT_LIMIT]]
-
-
-def run_dbt(args: str, workdir: Path) -> str:
-    """Run a dbt command from the workspace root and return a compact summary:
-    per-node status/error from run_results.json plus the tail of stdout. Color is
-    disabled at the source (DBT_USE_COLORS/NO_COLOR) so no ANSI noise enters history."""
-    args = (args or "").strip()
-    if not args:
-        return "Error: provide dbt arguments, e.g. 'run', 'build', 'test', or 'run --select my_model'"
-    try:
-        argv = ["dbt", *shlex.split(args)]
-    except ValueError as exc:
-        return f"Error: invalid dbt arguments: {exc}"
-    env = {**os.environ, "DBT_USE_COLORS": "False", "NO_COLOR": "1"}
-    before_run_results: dict[Path, float] = {}
-    for path in workdir.rglob("target/run_results.json"):
-        try:
-            before_run_results[path] = path.stat().st_mtime
-        except OSError:
-            continue
-    started_at = time.time()
-    started_monotonic = time.monotonic()
-    try:
-        result = subprocess.run(
-            argv,
-            cwd=workdir,
-            capture_output=True,
-            text=True,
-            timeout=DBT_TIMEOUT_SECS,
-            env=env,
-        )
-    except subprocess.TimeoutExpired:
-        return f"Error: dbt timed out after {DBT_TIMEOUT_SECS}s"
-    except FileNotFoundError:
-        return "Error: dbt is not installed or not on PATH"
-    elapsed_seconds = round(time.monotonic() - started_monotonic, 3)
-
-    stdout = _ANSI_ESCAPE.sub("", (result.stdout + result.stderr)).strip()
-    summary: dict[str, Any] = {
-        "command": " ".join(shlex.quote(part) for part in argv),
-        "returncode": result.returncode,
-        "ok": result.returncode == 0,
-        "elapsed_seconds": elapsed_seconds,
-    }
-    nodes, run_results_path, run_results_mtime = _dbt_node_summary(workdir, previous_mtimes=before_run_results)
-    if nodes is not None:
-        summary["node_counts"] = _dbt_status_counts(nodes)
-        summary["used_fresh_run_results"] = True
-        summary["nodes"], summary["truncated_nodes"] = _dbt_sort_and_cap_nodes(nodes)
-    else:
-        summary["used_fresh_run_results"] = False
-    if run_results_path is not None:
-        summary["run_results_path"] = str(run_results_path.relative_to(workdir))
-    if run_results_mtime is not None:
-        summary["run_results_mtime"] = run_results_mtime
-    artifact_hints = _collect_recent_artifact_hints(workdir, start_time=started_at)
-    if artifact_hints:
-        summary["artifact_hints"] = artifact_hints
-    tail = stdout[-DBT_STDOUT_TAIL_CHARS:]
-    if len(stdout) > DBT_STDOUT_TAIL_CHARS:
-        tail = "...[truncated]...\n" + tail
-    summary["stdout_tail"] = tail
-    return dump_json(summary)
 
 
 def connect_postgres():
@@ -498,6 +325,38 @@ def connect_postgres():
     if not dsn:
         raise RuntimeError(f"missing env var {POSTGRES_DSN_ENV}")
     return psycopg.connect(dsn)
+
+
+def connect_mysql():
+    dsn = os.getenv(MYSQL_DSN_ENV)
+    if not dsn:
+        raise RuntimeError(f"missing env var {MYSQL_DSN_ENV}")
+    try:
+        import pymysql
+    except Exception as exc:
+        raise RuntimeError("pymysql is not installed; mysql tools are unavailable") from exc
+
+    parsed = urlparse(dsn)
+    if parsed.scheme != "mysql":
+        raise RuntimeError("MYSQL_DSN must start with mysql://")
+    database = unquote(parsed.path.lstrip("/"))
+    if not parsed.hostname:
+        raise RuntimeError("MYSQL_DSN is missing host")
+    if not database:
+        raise RuntimeError("MYSQL_DSN is missing database")
+    return pymysql.connect(
+        host=parsed.hostname,
+        port=parsed.port or 3306,
+        user=unquote_plus(parsed.username or ""),
+        password=unquote_plus(parsed.password or ""),
+        database=database,
+        connect_timeout=10,
+        read_timeout=SQL_QUERY_TIMEOUT_SECS,
+        write_timeout=10,
+        charset="utf8mb4",
+        autocommit=False,
+        cursorclass=pymysql.cursors.Cursor,
+    )
 
 
 def _parse_table_ref(table_name: str, schema: str | None = None) -> tuple[str | None, str]:
@@ -630,7 +489,6 @@ def sample_postgres_rows(table_name: str, schema: str | None = None, limit: int 
         }
     )
 
-# TODO: add regex re.match(r"^(select|show|explain)\b", query, re.IGNORECASE)
 def run_postgres_readonly(sql_text: str) -> str:
     ok, query = _validate_readonly_sql(sql_text)
     if not ok:
@@ -748,28 +606,250 @@ def explain_postgres_query(sql_text: str) -> str:
     return dump_json({"dialect": "postgres", "query": query, "plan": plan})
 
 
+def _mysql_identifier(name: str) -> str:
+    return "`" + name.replace("`", "``") + "`"
+
+
+def _mysql_qualified_table(table_name: str, schema: str | None = None) -> str:
+    schema_name, table = _parse_table_ref(table_name, schema)
+    if schema_name:
+        return f"{_mysql_identifier(schema_name)}.{_mysql_identifier(table)}"
+    return _mysql_identifier(table)
+
+
+def _set_mysql_timeout(cur) -> None:
+    try:
+        cur.execute(f"SET SESSION MAX_EXECUTION_TIME={SQL_QUERY_TIMEOUT_SECS * 1000}")
+    except Exception:
+        pass
+
+
+def list_mysql_tables() -> str:
+    query = """
+    SELECT table_schema, table_name
+    FROM information_schema.tables
+    WHERE table_type = 'BASE TABLE'
+      AND table_schema = DATABASE()
+    ORDER BY table_schema, table_name
+    """
+    try:
+        conn = connect_mysql()
+        try:
+            with conn.cursor() as cur:
+                _set_mysql_timeout(cur)
+                cur.execute(query)
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:
+        return f"Error: {exc}"
+    return dump_json({"dialect": "mysql", "tables": [{"schema": s, "table": t} for s, t in rows]})
+
+
+def describe_mysql_table(table_name: str, schema: str | None = None) -> str:
+    try:
+        schema_name, table = _parse_table_ref(table_name, schema)
+    except ValueError as exc:
+        return f"Error: {exc}"
+    schema_filter = "AND c.table_schema = %s" if schema_name else "AND c.table_schema = DATABASE()"
+    params = [table]
+    if schema_name:
+        params.append(schema_name)
+    query = f"""
+    SELECT
+        c.table_schema,
+        c.table_name,
+        c.column_name,
+        c.column_type,
+        c.is_nullable,
+        COALESCE(c.column_default, ''),
+        c.ordinal_position,
+        CASE WHEN c.column_key = 'PRI' THEN 'YES' ELSE 'NO' END AS is_primary_key
+    FROM information_schema.columns c
+    WHERE c.table_name = %s
+      {schema_filter}
+    ORDER BY c.table_schema, c.table_name, c.ordinal_position
+    """
+    try:
+        conn = connect_mysql()
+        try:
+            with conn.cursor() as cur:
+                _set_mysql_timeout(cur)
+                cur.execute(query, params)
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:
+        return f"Error: {exc}"
+    if not rows:
+        return f"Error: table not found: {_table_label(schema_name, table)}"
+    first = rows[0]
+    result = {"dialect": "mysql", "schema": first[0], "table": first[1], "columns": []}
+    for row in rows:
+        _, _, column_name, data_type, nullable, default, ordinal_position, is_primary_key = row
+        result["columns"].append(
+            {
+                "name": column_name,
+                "type": data_type,
+                "nullable": nullable == "YES",
+                "default": default or None,
+                "ordinal_position": int(ordinal_position),
+                "primary_key": is_primary_key == "YES",
+            }
+        )
+    return dump_json(result)
+
+
+def sample_mysql_rows(table_name: str, schema: str | None = None, limit: int = 15) -> str:
+    try:
+        limit_value = int(limit)
+        quoted_table = _mysql_qualified_table(table_name, schema)
+    except Exception as exc:
+        return f"Error: {exc}"
+    if limit_value <= 0:
+        return "Error: limit must be positive"
+    query = f"SELECT * FROM {quoted_table} LIMIT %s"
+    try:
+        conn = connect_mysql()
+        try:
+            with conn.cursor() as cur:
+                _set_mysql_timeout(cur)
+                cur.execute("START TRANSACTION READ ONLY")
+                try:
+                    cur.execute(query, (limit_value,))
+                    columns = [desc[0] for desc in cur.description] if cur.description else []
+                    rows = cur.fetchall() if cur.description else []
+                finally:
+                    conn.rollback()
+        finally:
+            conn.close()
+    except Exception as exc:
+        return f"Error: {exc}"
+    return dump_json(
+        {
+            "dialect": "mysql",
+            "query": f"SELECT * FROM {_table_label(schema, table_name)} LIMIT {limit_value}",
+            "row_count": len(rows),
+            "rows": [dict(zip(columns, row)) for row in rows],
+        }
+    )
+
+
+def run_mysql_readonly(sql_text: str) -> str:
+    ok, query = _validate_select_like_sql(sql_text)
+    if not ok:
+        return query
+    try:
+        conn = connect_mysql()
+        try:
+            with conn.cursor() as cur:
+                _set_mysql_timeout(cur)
+                cur.execute("START TRANSACTION READ ONLY")
+                try:
+                    cur.execute(query)
+                    columns = [desc[0] for desc in cur.description] if cur.description else []
+                    rows = cur.fetchall() if cur.description else []
+                finally:
+                    conn.rollback()
+        finally:
+            conn.close()
+    except Exception as exc:
+        if _is_mysql_timeout_error(exc):
+            return f"Error: query timed out after {SQL_QUERY_TIMEOUT_SECS}s"
+        return f"Error: {exc}"
+    return dump_json(
+        {
+            "dialect": "mysql",
+            "query": query,
+            "row_count": len(rows),
+            "rows": [dict(zip(columns, row)) for row in rows],
+        }
+    )
+
+
+def validate_mysql_query(sql_text: str) -> str:
+    clean_sql = sql_text.replace("```sql", "").replace("```", "").strip().rstrip(";").strip()
+    if not clean_sql:
+        return dump_json(
+            {
+                "ok": False,
+                "error": "Empty SQL query",
+                "next_action": "Provide a non-empty SQL query and validate again.",
+            }
+        )
+    if not re.match(r"^(select|with|explain|show)\b", clean_sql, re.IGNORECASE):
+        return dump_json(
+            {
+                "ok": False,
+                "error": "Only SELECT, WITH, EXPLAIN, or SHOW queries are allowed.",
+                "next_action": "Revise the SQL to be read-only and validate again.",
+            }
+        )
+    if sqlglot is not None:
+        try:
+            sqlglot.parse_one(clean_sql, read="mysql")
+        except Exception as exc:
+            return dump_json(
+                {
+                    "ok": False,
+                    "stage": "syntax",
+                    "error": str(exc),
+                    "next_action": "Revise the SQL and validate again. Only return the query after validation returns ok=true.",
+                }
+            )
+    semantic_sql = clean_sql if clean_sql.lower().startswith("explain") else f"EXPLAIN {clean_sql}"
+    try:
+        conn = connect_mysql()
+        try:
+            with conn.cursor() as cur:
+                _set_mysql_timeout(cur)
+                cur.execute(semantic_sql)
+                cur.fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:
+        if _is_mysql_timeout_error(exc):
+            error = f"query timed out after {SQL_QUERY_TIMEOUT_SECS}s"
+        else:
+            error = str(exc)
+        return dump_json(
+            {
+                "ok": False,
+                "stage": "schema",
+                "error": error,
+                "next_action": "Revise the SQL and validate again. Only return the query after validation returns ok=true.",
+            }
+        )
+    return dump_json({"ok": True, "normalized_sql": clean_sql})
+
+
+def explain_mysql_query(sql_text: str) -> str:
+    ok, query = _validate_select_like_sql(sql_text)
+    if not ok:
+        return query
+    if not re.match(r"^(select|with)\b", query, re.IGNORECASE):
+        return "Error: Only SELECT/WITH queries can be explained"
+    try:
+        conn = connect_mysql()
+        try:
+            with conn.cursor() as cur:
+                _set_mysql_timeout(cur)
+                cur.execute(f"EXPLAIN {query}")
+                columns = [desc[0] for desc in cur.description] if cur.description else []
+                rows = cur.fetchall() if cur.description else []
+        finally:
+            conn.close()
+    except Exception as exc:
+        if _is_mysql_timeout_error(exc):
+            return f"Error: query timed out after {SQL_QUERY_TIMEOUT_SECS}s"
+        return f"Error: {exc}"
+    return dump_json({"dialect": "mysql", "query": query, "plan": [dict(zip(columns, row)) for row in rows]})
+
+
 def build_llm_tools(
     db_type: DBType,
-    yolo: bool,
     extra_tools: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    # TODO: LLM can change the work directory?
-    shared_tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "bash",
-                "description": "Run a shell command.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "command": {"type": "string", "description": "The shell command to execute."}
-                    },
-                    "required": ["command"],
-                },
-            },
-        }
-    ]
     sqlite_tools = [
         {
             "type": "function",
@@ -898,28 +978,6 @@ def build_llm_tools(
                 },
             },
         },
-        {
-                "type": "function",
-                "function": {
-                    "name": "run_dbt",
-                    "description": (
-                        "Run a dbt command from the workspace root (e.g. 'run', 'build', 'test', "
-                        "'compile', 'run --select my_model'). Returns a compact summary: per-node "
-                        "status and error messages from run_results.json, plus the tail of stdout. "
-                        "Prefer this over invoking dbt through bash."
-                    ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "args": {
-                                "type": "string",
-                                "description": "Arguments passed to dbt, without the leading 'dbt' (e.g. 'build' or 'run --select my_model').",
-                            }
-                        },
-                        "required": ["args"],
-                    },
-                },
-        }
     ]
     postgres_tools = [
         {
@@ -1002,33 +1060,99 @@ def build_llm_tools(
             },
         },
     ]
+    mysql_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "list_mysql_tables",
+                "description": "List MySQL tables in the connected database.",
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "describe_mysql_table",
+                "description": "Describe a MySQL table's columns and keys.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table_name": {"type": "string", "description": "Table name, optionally schema-qualified."},
+                        "schema": {"type": "string", "description": "Optional schema name."},
+                    },
+                    "required": ["table_name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "sample_mysql_rows",
+                "description": "Return a small sample of rows from a MySQL table.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "table_name": {"type": "string", "description": "Table name, optionally schema-qualified."},
+                        "schema": {"type": "string", "description": "Optional schema name."},
+                        "limit": {"type": "integer", "description": "Maximum rows to return. Defaults to 15."},
+                    },
+                    "required": ["table_name"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "run_mysql_readonly",
+                "description": "Execute a read-only SQL query against MySQL.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"sql": {"type": "string", "description": "The SQL statement to execute."}},
+                    "required": ["sql"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "explain_mysql_query",
+                "description": "Explain a MySQL query plan for a read-only query.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"sql": {"type": "string", "description": "The SQL query to explain."}},
+                    "required": ["sql"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "validate_mysql_query",
+                "description": (
+                    "Validate a MySQL query against the live schema before finalizing it. "
+                    "Checks syntax and uses EXPLAIN to resolve table/column references without executing the query."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"sql": {"type": "string", "description": "The SQL statement to validate."}},
+                    "required": ["sql"],
+                },
+            },
+        },
+    ]
     tools_by_type = {
         DBType.SQLITE: sqlite_tools,
         DBType.DUCKDB: duckdb_tools,
         DBType.POSTGRES: postgres_tools,
+        DBType.MYSQL: mysql_tools,
     }
-    tools = shared_tools + tools_by_type[db_type]
+    tools = list(tools_by_type[db_type])
     if extra_tools:
         tools = tools + extra_tools
-    if not yolo:
-        tools.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": "ask_user",
-                    "description": "Ask the user a clarifying question when more information is needed.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"question": {"type": "string", "description": "The clarifying question."}},
-                        "required": ["question"],
-                    },
-                },
-            }
-        )
     return tools
 
 
-def build_tool_handler_map(workdir: Path):
+def build_tool_handler_map():
     return {
         # SQLite tools
         "list_sqlite_tables": lambda **kw: list_sqlite_tables(kw["db_path"]),
@@ -1041,7 +1165,6 @@ def build_tool_handler_map(workdir: Path):
         "sample_duckdb_rows": lambda **kw: sample_duckdb_rows(kw["db_path"], kw["table_name"], kw.get("limit", 15)),
         "run_duckdb_readonly": lambda **kw: run_duckdb_readonly(kw["db_path"], kw["sql"]),
         "validate_duckdb_query": lambda **kw: validate_duckdb_query(kw["sql"]),
-        "run_dbt": lambda **kw: run_dbt(kw["args"], workdir=workdir),
         # Postgres tools
         "list_postgres_tables": lambda **_: list_postgres_tables(),
         "describe_postgres_table": lambda **kw: describe_postgres_table(kw["table_name"], kw.get("schema")),
@@ -1049,8 +1172,11 @@ def build_tool_handler_map(workdir: Path):
         "run_postgres_readonly": lambda **kw: run_postgres_readonly(kw["sql"]),
         "explain_postgres_query": lambda **kw: explain_postgres_query(kw["sql"]),
         "validate_postgres_query": lambda **kw: validate_postgres_query(kw["sql"]),
-        # Shared tools
-        "bash": lambda **kw: run_bash(kw["command"], workdir=workdir),
-        # Clarification tool
-        "ask_user": lambda **kw: "Error: ask_user is disabled in this non-interactive run.",
+        # MySQL tools
+        "list_mysql_tables": lambda **_: list_mysql_tables(),
+        "describe_mysql_table": lambda **kw: describe_mysql_table(kw["table_name"], kw.get("schema")),
+        "sample_mysql_rows": lambda **kw: sample_mysql_rows(kw["table_name"], kw.get("schema"), kw.get("limit", 15)),
+        "run_mysql_readonly": lambda **kw: run_mysql_readonly(kw["sql"]),
+        "explain_mysql_query": lambda **kw: explain_mysql_query(kw["sql"]),
+        "validate_mysql_query": lambda **kw: validate_mysql_query(kw["sql"]),
     }
