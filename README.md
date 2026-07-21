@@ -59,9 +59,13 @@ usable as the lower-level agent package.
 
 ## Requirements
 
-- Python 3.11 or newer
+- Python 3.11.x
 - Node.js `^20.19.0` or `>=22.12.0`
 - npm
+
+Python 3.11.x is the currently validated version for both backend development
+and Desktop packaging. Using the same minor version keeps the local runtime and
+the PyInstaller build environment consistent.
 
 PostgreSQL, MySQL, Ollama, and local GGUF models are optional. They are needed
 only when you choose those connection or model types.
@@ -71,7 +75,7 @@ only when you choose those connection or model types.
 ### 1. Install the backend
 
 From the repository root, create the runtime environment expected by the start
-script:
+script. Confirm that `python3.11 --version` reports Python 3.11.x first:
 
 ```bash
 python3.11 -m venv backend/.venv-runtime
@@ -167,12 +171,17 @@ cd frontend
 npm run dev:desktop
 ```
 
+The development shell uses the AurigaSQL product name and icon. It still runs
+from Electron's development executable; distributable application metadata is
+applied by the packaging commands below.
+
 Set `VITE_BFF_BASE_URL` in `frontend/.env.local` only when the BFF is not running
 at `http://127.0.0.1:6003`.
 
 ## Desktop Packaging
 
-Install the packaging dependencies first:
+Desktop packaging uses the same Python 3.11.x virtual environment created in
+Quick Start. Activate it and install the packaging dependencies first:
 
 ```bash
 source backend/.venv-runtime/bin/activate

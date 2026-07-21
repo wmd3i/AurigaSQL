@@ -12,7 +12,7 @@ DIST_DIR="${AURIGASQL_BACKEND_DIST_DIR:-$REPO_ROOT/frontend/electron-backend}"
 
 PYTHON_VERSION="$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 if [[ "$PYTHON_VERSION" != 3.11* ]]; then
-  echo "AurigaSQL desktop backend builds require Python 3.11; got $PYTHON_VERSION from $PYTHON_BIN" >&2
+  echo "AurigaSQL desktop backend builds require Python 3.11.x; got $PYTHON_VERSION from $PYTHON_BIN" >&2
   exit 1
 fi
 
