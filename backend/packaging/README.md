@@ -27,9 +27,12 @@ platform-specific `llama.cpp` runtime files.
 
 ## Build the bundled backend and app
 
-Use Python 3.11 for PyInstaller builds.
+Use Python 3.11.x for PyInstaller builds. This is the currently validated
+packaging version and should match the environment at `backend/.venv-runtime`.
 
 ```bash
+python3.11 -m venv backend/.venv-runtime
+source backend/.venv-runtime/bin/activate
 python -m pip install -e .
 python -m pip install -r backend/requirements.txt
 python -m pip install -r backend/requirements-build.txt

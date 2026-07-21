@@ -10,7 +10,7 @@ $env:PYINSTALLER_CONFIG_DIR = Join-Path $RepoRoot "build/pyinstaller-cache"
 
 $PythonVersion = & $PythonBin -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
 if (-not $PythonVersion.StartsWith("3.11")) {
-  throw "AurigaSQL desktop backend builds require Python 3.11; got $PythonVersion from $PythonBin"
+  throw "AurigaSQL desktop backend builds require Python 3.11.x; got $PythonVersion from $PythonBin"
 }
 
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null

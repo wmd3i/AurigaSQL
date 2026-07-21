@@ -4,6 +4,8 @@ const http = require("node:http");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
+const APP_NAME = "AurigaSQL";
+const APP_ICON = path.join(__dirname, "assets", "icon.png");
 const DEV_SERVER_URL = process.env.ELECTRON_RENDERER_URL || "http://127.0.0.1:5173";
 const BACKEND_PORT = Number(process.env.AURIGASQL_BFF_PORT || "6013");
 const BACKEND_BASE_URL = `http://127.0.0.1:${BACKEND_PORT}`;
@@ -11,6 +13,10 @@ let backendProcess = null;
 let backendRestartCount = 0;
 let backendStopRequested = false;
 let quitting = false;
+
+// `electron .` runs through Electron's generic development executable. Set the
+// product identity explicitly so the development shell matches packaged builds.
+app.setName(APP_NAME);
 
 ipcMain.handle("app:restart-backend", async () => {
   if (!app.isPackaged) return { ok: false, message: "Backend restart is only managed in packaged app mode." };
@@ -55,7 +61,8 @@ function createWindow() {
     height: 960,
     minWidth: 1100,
     minHeight: 720,
-    title: "AurigaSQL",
+    title: APP_NAME,
+    icon: APP_ICON,
     backgroundColor: "#f7f4ee",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -345,6 +352,10 @@ app.on("before-quit", () => {
 });
 
 app.whenReady().then(() => {
+  if (!app.isPackaged && process.platform === "darwin") {
+    app.dock.setIcon(APP_ICON);
+  }
+
   createWindow();
 
   app.on("activate", () => {
