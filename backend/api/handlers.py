@@ -32,6 +32,7 @@ from data.connections.demo import (
 )
 from shared.config import CONFIG_DIR, RESOURCE_ROOT, RUNTIME_ROOT, settings
 from shared.llm import call_llm
+from shared.llama_runtime import platform_runtime_relative_path
 from shared.llm_profile_store import (
     MASK_SENTINELS,
     create_profile,
@@ -164,16 +165,23 @@ def _local_model_path() -> Path:
 
 def _find_llama_server_path() -> Path:
     env_path = os.getenv("AURIGASQL_LLAMA_SERVER_PATH", "").strip()
+    env_candidate = Path(env_path).expanduser() if env_path else None
+    if env_candidate and env_candidate.exists():
+        return env_candidate
+
+    relative_runtime = platform_runtime_relative_path()
+    executable_name = relative_runtime.name
     candidates = [
-        Path(env_path).expanduser() if env_path else None,
-        RESOURCE_ROOT / "llama.cpp" / "llama-server",
-        Path(__file__).resolve().parents[2] / "frontend" / "vendor" / "llama.cpp" / "macos" / "llama-server",
+        env_candidate,
+        RESOURCE_ROOT / "llama.cpp" / executable_name,
+        Path(__file__).resolve().parents[2] / "frontend" / "vendor" / "llama.cpp" / relative_runtime,
     ]
     for candidate in candidates:
         if candidate and candidate.exists():
             return candidate
+    attempted = ", ".join(str(candidate) for candidate in candidates if candidate)
     raise FileNotFoundError(
-        "llama-server was not found. Expected it in app resources at llama.cpp/llama-server."
+        f"llama-server was not found for {relative_runtime.parent}. Tried: {attempted}"
     )
 
 
