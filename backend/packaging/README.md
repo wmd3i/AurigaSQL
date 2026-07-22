@@ -45,8 +45,15 @@ Release builds remain separate:
 
 ```bash
 npm run dist:desktop:mac-arm64
+npm run dist:desktop:mac-x64
 npm run dist:desktop:win-x64
 ```
+
+Run each command on its matching operating system and CPU architecture. Before
+electron-builder runs, `frontend/scripts/prepare-llama-runtime.cjs` validates
+the selected llama.cpp runtime and packaged backend, then copies only that
+platform's runtime into the Git-ignored `frontend/.llama-runtime/` staging
+directory.
 
 Use the packaged backend smoke directly when debugging resource paths:
 
