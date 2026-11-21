@@ -5,7 +5,8 @@ import { bff } from "../../api/bff";
 import { cn } from "../../lib/cn";
 import { parseSchemaGraph, type SchemaGraph, type SchemaRelation } from "../../lib/schemaGraph";
 import type { Conversation } from "../../state/types";
-import { DbIcon, dbEngine } from "../icons/DbIcon";
+import { inferDataEngine } from "../../lib/databaseEngine";
+import { DialectIcon } from "../home/DialectIcon";
 
 const PANEL_W = 420;
 const MIN_TABLE_W = 184;
@@ -1037,7 +1038,7 @@ export function CanvasSchemaPanel(props: {
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-faint">Current DB</p>
             <div className="mt-0.5 flex items-center gap-2">
-              <DbIcon engine={dbEngine(props.canvasDb)} className="h-4 w-4 shrink-0" />
+              <DialectIcon dialect={inferDataEngine(props.canvasDb)} className="h-4 w-4 shrink-0" />
               <p className="truncate text-[15px] font-semibold text-ink">{props.canvasDb}</p>
             </div>
             <div className="mt-2 flex items-center gap-3 text-[11px] text-faint">
