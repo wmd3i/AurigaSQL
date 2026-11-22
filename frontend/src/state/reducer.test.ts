@@ -273,6 +273,37 @@ describe("reducer", () => {
     expect(s.canvasDb).toBe("db1");
   });
 
+  it("OPEN_WORKSPACE restores the current canvas work after returning home or opening chat", () => {
+    const workspace = reducer(initialState, {
+      type: "CONVERSATION_STARTED", id: "tw", database: "db1", databases: ["db1"], title: "q", createdAt: 1,
+      mode: "workspace", canvasWorkId: "work-1",
+    });
+    const home = reducer(workspace, { type: "NEW_FLOW" });
+    const chat = reducer(home, {
+      type: "CONVERSATION_STARTED", id: "chat", database: "db2", databases: ["db2"], title: "chat", createdAt: 2,
+      mode: "agent",
+    });
+    for (const previous of [home, chat]) {
+      const reopened = reducer(previous, { type: "OPEN_WORKSPACE", database: "Canvas", preserveActiveThread: true });
+      expect(reopened.view).toBe("canvas");
+      expect(reopened.activeId).toBe("tw");
+      expect(reopened.currentCanvasWorkId).toBe("work-1");
+      expect(reopened.conversations).toEqual(previous.conversations);
+    }
+  });
+
+  it("OPEN_WORKSPACE does not restore a different work after starting over", () => {
+    const workspace = reducer(initialState, {
+      type: "CONVERSATION_STARTED", id: "tw", database: "db1", databases: ["db1"], title: "q", createdAt: 1,
+      mode: "workspace", canvasWorkId: "work-1",
+    });
+    const cleared = reducer(workspace, { type: "START_OVER_WORKSPACE", canvasWorkId: "work-2" });
+    const reopened = reducer(cleared, { type: "OPEN_WORKSPACE", database: "db2", preserveActiveThread: true });
+    expect(reopened.activeId).toBeNull();
+    expect(reopened.currentCanvasWorkId).toBe("work-2");
+    expect(reopened.canvasDb).toBe("db2");
+  });
+
   it("OPEN_WORKSPACE_SETUP opens the data-engine setup page without changing the flow mode", () => {
     const s = reducer(started, { type: "OPEN_WORKSPACE_SETUP" });
     expect(s.view).toBe("workspace_setup");
