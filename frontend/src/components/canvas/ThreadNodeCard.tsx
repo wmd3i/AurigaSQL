@@ -109,6 +109,7 @@ function ExpandableClamp(props: { children: ReactNode; collapsedHeight?: number 
       {overflowing && (
         <button
           onClick={() => setExpanded((current) => !current)}
+          title="Expand or collapse this text"
           className="mt-2 text-[12px] font-medium text-muted hover:text-ink"
         >
           {expanded ? "Show less" : "Show more"}
@@ -500,6 +501,7 @@ function ToolGroupCard(props: {
                       props.onInspectTool?.(tool, true);
                     }}
                     className="flex w-full items-center justify-between gap-3 px-3.5 text-left"
+                    title="Click for details · Double-click to open in the inspector"
                     style={{ height: itemHeight }}
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">
@@ -550,6 +552,7 @@ function ToolGroupCard(props: {
                           }}
                           className="ml-auto rounded p-0.5 text-faint hover:bg-hover hover:text-ink"
                           aria-label="Close branch prompt"
+                          title="Close branch prompt"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>

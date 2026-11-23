@@ -2,9 +2,9 @@ import { MessageCircle, Workflow } from "lucide-react";
 import { cn } from "../lib/cn";
 import type { QueryMode } from "../state/types";
 
-const OPTIONS: Array<{ mode: QueryMode; label: string; icon: typeof MessageCircle }> = [
-  { mode: "agent", label: "Chat", icon: MessageCircle },
-  { mode: "workspace", label: "Canvas", icon: Workflow },
+const OPTIONS: Array<{ mode: QueryMode; label: string; hint: string; icon: typeof MessageCircle }> = [
+  { mode: "agent", label: "Chat", hint: "Chat — one conversation at a time", icon: MessageCircle },
+  { mode: "workspace", label: "Canvas", hint: "Canvas — see all threads on one board", icon: Workflow },
 ];
 
 export function FlowModeSwitch(props: {
@@ -28,6 +28,7 @@ export function FlowModeSwitch(props: {
             key={option.mode}
             type="button"
             aria-pressed={active}
+            title={option.hint}
             onClick={() => props.onModeChange(option.mode)}
             className={cn(
               "inline-flex h-8 min-w-[78px] items-center justify-center gap-1.5 rounded-full px-3 text-[14px] font-semibold transition-all duration-300 ease-out",

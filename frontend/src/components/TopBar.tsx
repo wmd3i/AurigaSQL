@@ -20,6 +20,7 @@ export function TopBar(props: {
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 text-[13px]">
       <button
         aria-label="Home"
+        title="Home"
         onClick={props.onNewFlow}
         className="flex h-7 w-7 items-center justify-center rounded text-ink hover:bg-hover"
       >
@@ -51,6 +52,7 @@ export function TopBar(props: {
 
       <button
         onClick={props.onNewFlow}
+        title="Start a new query"
         className="flex items-center gap-1.5 rounded-md border border-line bg-card px-3 py-1.5 text-[13px] font-medium text-ink shadow-sm hover:bg-hover"
       >
         <Plus className="h-3.5 w-3.5" />

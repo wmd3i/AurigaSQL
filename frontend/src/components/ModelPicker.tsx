@@ -53,6 +53,7 @@ export function ModelPicker(props: {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        title="Change model"
         onClick={() => selected && setOpen((value) => !value)}
         className={cn(
           variant === "inline"
@@ -83,7 +84,8 @@ export function ModelPicker(props: {
         <button
           type="button"
           onClick={props.onOpenConfig}
-          aria-label="Open LLM Configure"
+          aria-label="Model settings"
+          title="Model settings"
           className={cn(
             "flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-sm transition hover:bg-hover hover:text-ink",
             props.settingsClassName,
