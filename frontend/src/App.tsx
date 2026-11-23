@@ -12,7 +12,6 @@ import { bff, type DemoGroupId, type DataSource, type ModelInfo } from "./api/bf
 import { ModelContext } from "./state/modelContext";
 import { loadAppState, saveAppState } from "./state/persistence";
 import { buildNodes, type ThreadNode } from "./lib/buildNodes";
-import { cn } from "./lib/cn";
 import type { Conversation } from "./state/types";
 import type { BranchTarget } from "./components/canvas/CanvasComposer";
 import type { CanvasToneId } from "./lib/canvasTones";
@@ -20,10 +19,7 @@ import type { CanvasToneId } from "./lib/canvasTones";
 const BRANCH_FIELD_LIMIT = 2400;
 const BRANCH_CONTEXT_LIMIT = 14000;
 const CANVAS_TRANSITION_MS = 520;
-const CANVAS_EXPAND_MOUNT_DELAY_MS = 650;
-const CANVAS_EXPAND_HIDE_DELAY_MS = 920;
 type CanvasTransitionPhase = "enter" | "exit" | null;
-type CanvasExpandRect = { left: number; top: number; width: number; height: number };
 type CanvasSourceMismatch = {
   query: string;
   branchTarget: BranchTarget | null;
@@ -152,13 +148,8 @@ export default function App() {
   const [workspaceSources, setWorkspaceSources] = useState<DataSource[]>([]);
   const [canvasSourceMismatch, setCanvasSourceMismatch] = useState<CanvasSourceMismatch | null>(null);
   const [canvasTransitionPhase, setCanvasTransitionPhase] = useState<CanvasTransitionPhase>(null);
-  const [canvasExpandRect, setCanvasExpandRect] = useState<CanvasExpandRect | null>(null);
-  const [canvasExpandFull, setCanvasExpandFull] = useState(false);
   const [workspaceResetToken, setWorkspaceResetToken] = useState(0);
   const canvasTransitionTimeoutRef = useRef<number | null>(null);
-  const canvasExpandFrameRef = useRef<number | null>(null);
-  const canvasExpandTimeoutRef = useRef<number | null>(null);
-  const canvasExpandMountTimeoutRef = useRef<number | null>(null);
 
   // App-wide model selection (shared by the home picker + canvas/result bylines).
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -204,9 +195,6 @@ export default function App() {
   useEffect(() => {
     return () => {
       if (canvasTransitionTimeoutRef.current !== null) window.clearTimeout(canvasTransitionTimeoutRef.current);
-      if (canvasExpandTimeoutRef.current !== null) window.clearTimeout(canvasExpandTimeoutRef.current);
-      if (canvasExpandMountTimeoutRef.current !== null) window.clearTimeout(canvasExpandMountTimeoutRef.current);
-      if (canvasExpandFrameRef.current !== null) window.cancelAnimationFrame(canvasExpandFrameRef.current);
     };
   }, []);
 
@@ -278,22 +266,7 @@ export default function App() {
     }
   };
 
-  const clearCanvasExpandTimers = () => {
-    if (canvasExpandTimeoutRef.current !== null) {
-      window.clearTimeout(canvasExpandTimeoutRef.current);
-      canvasExpandTimeoutRef.current = null;
-    }
-    if (canvasExpandMountTimeoutRef.current !== null) {
-      window.clearTimeout(canvasExpandMountTimeoutRef.current);
-      canvasExpandMountTimeoutRef.current = null;
-    }
-    if (canvasExpandFrameRef.current !== null) {
-      window.cancelAnimationFrame(canvasExpandFrameRef.current);
-      canvasExpandFrameRef.current = null;
-    }
-  };
-
-  const showWorkspaceCanvas = (source: DataSource | null, preserveActiveThread = false) => {
+  const showWorkspaceCanvas = (source: DataSource | null, preserveActiveThread = true) => {
     clearCanvasTransitionTimer();
     setCanvasTransitionPhase("enter");
     setWorkspaceSource(source);
@@ -304,49 +277,9 @@ export default function App() {
     }, CANVAS_TRANSITION_MS + 80);
   };
 
-  const openWorkspace = (source: DataSource | null, expandRect?: CanvasExpandRect | null) => {
-    clearCanvasTransitionTimer();
-    clearCanvasExpandTimers();
-    setWorkspaceSource(source);
-
-    if (!expandRect) {
-      setCanvasExpandRect(null);
-      setCanvasExpandFull(false);
-      showWorkspaceCanvas(source);
-      return;
-    }
-
-    setCanvasExpandRect(expandRect);
-    setCanvasExpandFull(false);
-    canvasExpandFrameRef.current = window.requestAnimationFrame(() => {
-      canvasExpandFrameRef.current = null;
-      setCanvasExpandFull(true);
-    });
-
-    canvasExpandMountTimeoutRef.current = window.setTimeout(() => {
-      canvasExpandMountTimeoutRef.current = null;
-      showWorkspaceCanvas(source, true);
-    }, CANVAS_EXPAND_MOUNT_DELAY_MS);
-
-    canvasExpandTimeoutRef.current = window.setTimeout(() => {
-      canvasExpandTimeoutRef.current = null;
-      setCanvasExpandRect(null);
-      setCanvasExpandFull(false);
-    }, CANVAS_EXPAND_HIDE_DELAY_MS);
-  };
-
-  const collapseWorkspaceCanvas = () => {
-    clearCanvasTransitionTimer();
-    clearCanvasExpandTimers();
-    setCanvasExpandRect(null);
-    setCanvasExpandFull(false);
-    setCanvasTransitionPhase("exit");
-    canvasTransitionTimeoutRef.current = window.setTimeout(() => {
-      dispatch({ type: "SET_ENTRY_MODE", mode: "workspace" });
-      dispatch({ type: "SET_VIEW", view: "home" });
-      setCanvasTransitionPhase(null);
-      canvasTransitionTimeoutRef.current = null;
-    }, CANVAS_TRANSITION_MS - 40);
+  const openWorkspace = (source: DataSource | null) => {
+    setCanvasSourceMismatch(null);
+    showWorkspaceCanvas(source);
   };
 
   const startOverWorkspace = (view: "home" | "canvas" = "home") => {
@@ -498,7 +431,6 @@ export default function App() {
         onStartOverWorkspace={() => startOverWorkspace("canvas")}
         workspaceResetToken={workspaceResetToken}
         transitionPhase={canvasTransitionPhase}
-        onCollapseCanvas={collapseWorkspaceCanvas}
         onConnectData={openWorkspaceSetup}
         onOpenLlmConfig={() => setLlmConfigOpen(true)}
         hasDataSource={Boolean(activeConversation?.source ?? workspaceSource) || connectedSidebarSources.some((source) => source.ready)}
@@ -532,16 +464,10 @@ export default function App() {
         conversations={state.conversations}
         activeId={state.activeId}
         onNewFlow={() => dispatch({ type: "NEW_FLOW" })}
-        onStartOverWorkspace={() => startOverWorkspace("home")}
-        workspaceResetToken={workspaceResetToken}
-        currentCanvasWorkId={state.currentCanvasWorkId}
         onOpen={(id) => dispatch({ type: "OPEN_CONVERSATION", id })}
         onDeleteConversation={onDeleteConversation}
         onStart={onStart}
-        onAnswer={chat.answerPending}
-        onStop={chat.cancel}
-        mode={state.entryMode}
-        onModeChange={(mode) => dispatch({ type: "SET_ENTRY_MODE", mode })}
+        selectedDataSource={workspaceSource}
         onOpenWorkspaceSetup={openWorkspaceSetup}
         onOpenCanvas={openWorkspace}
         onOpenLlmConfig={() => setLlmConfigOpen(true)}
@@ -563,27 +489,6 @@ export default function App() {
         onClose={() => setDataConnectionOpen(false)}
         onChanged={handleDataConnectionChanged}
       />
-      {canvasExpandRect && (
-        <div
-          aria-hidden="true"
-          className={cn(
-            "canvas-expand-card canvas-dot-background pointer-events-none fixed z-[80] overflow-hidden transition-[transform,border-radius,border-color,box-shadow] duration-[620ms] ease-[cubic-bezier(0.2,0.9,0.18,1)] will-change-transform",
-            canvasExpandFull && "canvas-expand-card-open",
-          )}
-          style={{
-            left: canvasExpandRect.left,
-            top: canvasExpandRect.top,
-            width: `${canvasExpandRect.width}px`,
-            height: `${canvasExpandRect.height}px`,
-            borderRadius: canvasExpandFull ? 0 : 28,
-            transform: canvasExpandFull
-              ? `translate3d(${-canvasExpandRect.left}px, ${-canvasExpandRect.top}px, 0) scale(${window.innerWidth / canvasExpandRect.width}, ${window.innerHeight / canvasExpandRect.height})`
-              : "translate3d(0, 0, 0) scale(1)",
-          }}
-        >
-          <div className="h-full w-full" />
-        </div>
-      )}
     </ModelContext.Provider>
   );
 }

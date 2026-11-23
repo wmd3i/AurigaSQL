@@ -1599,20 +1599,22 @@ function CanvasInner(props: {
                 </>
               )}
               {((props.embedded && props.onExpandCanvas) || props.onCollapseCanvas) && (
-                <button
-                  aria-label={props.embedded && props.onExpandCanvas ? "Expand canvas" : "Shrink canvas"}
-                  title={props.embedded && props.onExpandCanvas ? "Expand canvas" : "Shrink canvas"}
-                  onClick={props.embedded && props.onExpandCanvas ? props.onExpandCanvas : props.onCollapseCanvas}
-                  className="rounded-lg p-1 text-muted transition-colors hover:bg-hover hover:text-ink"
-                >
-                  {props.embedded ? (
-                    <Maximize2 className="h-3.5 w-3.5" />
-                  ) : (
-                    <Minimize2 className="h-4 w-4" />
-                  )}
-                </button>
+                <>
+                  <button
+                    aria-label={props.embedded && props.onExpandCanvas ? "Expand canvas" : "Shrink canvas"}
+                    title={props.embedded && props.onExpandCanvas ? "Expand canvas" : "Shrink canvas"}
+                    onClick={props.embedded && props.onExpandCanvas ? props.onExpandCanvas : props.onCollapseCanvas}
+                    className="rounded-lg p-1 text-muted transition-colors hover:bg-hover hover:text-ink"
+                  >
+                    {props.embedded ? (
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Minimize2 className="h-4 w-4" />
+                    )}
+                  </button>
+                  <div className={cn("w-px bg-line", props.embedded ? "h-6" : "h-7")} />
+                </>
               )}
-              <div className={cn("w-px bg-line", props.embedded ? "h-6" : "h-7")} />
               <div className={cn("flex items-center", props.embedded ? "gap-1.5" : "gap-2")}>
                 <button
                   aria-label="Fit view"

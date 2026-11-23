@@ -301,7 +301,9 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "OPEN_WORKSPACE": {
       const activeWorkspace = action.preserveActiveThread
-        ? state.conversations.find((c) => c.id === state.activeId && c.mode === "workspace")
+        ? state.conversations.find((c) => c.id === state.activeId && c.mode === "workspace") ??
+          state.conversations.find((c) => c.mode === "workspace" && state.currentCanvasWorkId &&
+            canvasWorkIdForConversation(state.conversations, c) === state.currentCanvasWorkId)
         : null;
       return {
         ...state,
