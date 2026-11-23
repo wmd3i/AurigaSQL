@@ -7,6 +7,7 @@ import {
   ReactFlowProvider,
   applyNodeChanges,
   getViewportForBounds,
+  useNodesInitialized,
   useNodesState,
   useReactFlow,
   useViewport,
@@ -391,10 +392,10 @@ function CanvasInner(props: {
   const [nodes, setNodes] = useNodesState<CanvasNode>([]);
   const nodesRef = useRef<CanvasNode[]>([]);
   const [nodeHeights, setNodeHeights] = useState<Record<string, number>>({});
-  const initiallyFocusedThreadIdsRef = useRef<Set<string>>(new Set());
   const baseCardPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const manualCardPositionIdsRef = useRef<Set<string>>(new Set());
   const rf = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
   const { zoom } = useViewport();
   const [leftPanel, setLeftPanel] = useState<LeftPanel>(null);
   const [leftPanelLeft, setLeftPanelLeft] = useState(LEFT_PANEL_BASE_X);
@@ -904,7 +905,7 @@ function CanvasInner(props: {
       const visibleLeftScreen = sidebarSpace + chromePaddingX / 2;
       const desiredX = viewport.x + visibleLeftScreen;
       const minTopInset = props.embedded ? 24 : 40;
-      const desiredY = viewport.y - visibleHeight * (opts?.upperBias ?? (props.embedded ? 0 : 0.18));
+      const desiredY = viewport.y + chromePaddingY / 2 - visibleHeight * (opts?.upperBias ?? (props.embedded ? 0 : 0.18));
       const topScreenY = bounds.y * viewport.zoom + desiredY;
       const clampedY = topScreenY < minTopInset ? desiredY + (minTopInset - topScreenY) : desiredY;
 
@@ -929,9 +930,10 @@ function CanvasInner(props: {
     [focusedCanvasThreadId, nodes],
   );
   const focusedThreadSignature = useMemo(
-    () => focusedThreadNodeIds.join("|"),
-    [focusedThreadNodeIds],
+    () => focusedThreadNodeIds.map((id) => `${id}:${nodeHeights[id] ?? "pending"}`).join("|"),
+    [focusedThreadNodeIds, nodeHeights],
   );
+  const focusedThreadPosition = focusedCanvasThreadId ? floatingThreadPositions[focusedCanvasThreadId] : undefined;
   const allCardNodeIds = useMemo(
     () => nodes.filter((n) => n.type === "card").map((n) => n.id),
     [nodes],
@@ -1222,21 +1224,17 @@ function CanvasInner(props: {
   }, [allConversationById, branchDrafts, ordered, threadNodes]);
 
   useEffect(() => {
-    if (!focusedCanvasThreadId) return;
-    if (focusedThreadNodeIds.length === 0) return;
-    if (initiallyFocusedThreadIdsRef.current.has(focusedCanvasThreadId)) return;
-    initiallyFocusedThreadIdsRef.current.add(focusedCanvasThreadId);
-    focusCanvasNodes(focusedThreadNodeIds, { ...DEFAULT_THREAD_FOCUS, duration: 400 });
-  }, [focusCanvasNodes, focusedCanvasThreadId, focusedThreadNodeIds]);
-
-  useEffect(() => {
-    if (!props.activeId) return;
-    if (focusedThreadNodeIds.length === 0) return;
-    const activeFocusKey = `${props.activeId}:${focusedThreadSignature}:${rightChromeWidth}`;
+    if (!focusedCanvasThreadId || !nodesInitialized || focusedThreadNodeIds.length === 0) return;
+    const activeFocusKey = `${focusedCanvasThreadId}:${focusedThreadSignature}:${focusedThreadPosition?.x}:${focusedThreadPosition?.y}:${leftChromeWidth}:${rightChromeWidth}`;
     if (lastActiveFocusRef.current === activeFocusKey) return;
-    lastActiveFocusRef.current = activeFocusKey;
-    focusCanvasNodes(focusedThreadNodeIds, { ...THREAD_FOCUS, duration: 420 });
-  }, [focusCanvasNodes, focusedThreadNodeIds, focusedThreadSignature, props.activeId, rightChromeWidth]);
+    // Controlled node positions are synchronized to React Flow after render.
+    // Fit only after that commit, including the draft's final spawn position.
+    const frame = requestAnimationFrame(() => {
+      lastActiveFocusRef.current = activeFocusKey;
+      focusCanvasNodes(focusedThreadNodeIds, { ...THREAD_FOCUS, duration: 420 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusCanvasNodes, focusedCanvasThreadId, focusedThreadNodeIds, focusedThreadSignature, focusedThreadPosition, leftChromeWidth, nodesInitialized, rightChromeWidth]);
 
   const onNodeClick: NodeMouseHandler<CanvasNode> = (_, node) => {
     if (node.type !== "card") return;
