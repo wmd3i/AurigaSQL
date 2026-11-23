@@ -173,6 +173,7 @@ function CompactChipList(props: {
         <button
           type="button"
           onClick={() => setShowAll((current) => !current)}
+          title="Expand or collapse this list"
           className="text-left text-[12px] font-medium text-muted hover:text-accent"
         >
           {showAll ? "Show less" : `Show ${items.length - initialCount} more ${itemLabel}`}

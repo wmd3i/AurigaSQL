@@ -250,6 +250,7 @@ function CanvasDataSourcePanel(props: {
           <button
             type="button"
             onClick={() => props.onDisconnectDataGroup?.(disconnectableDemoGroupId)}
+            title="Disconnect demo data — removes it from this workspace"
             className="mt-5 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-faint transition hover:bg-danger-soft hover:text-danger"
           >
             <Unplug className="h-3 w-3" />
@@ -325,6 +326,7 @@ function CanvasDataSourcePanel(props: {
                 <button
                   type="button"
                   onClick={props.onUseSuggestedSource}
+                  title="Switch to the database the agent suggests for this question"
                   className="rounded-full border border-accent/40 bg-card px-2.5 py-1 font-semibold text-accent transition hover:bg-hover"
                 >
                   Use suggested
@@ -332,6 +334,7 @@ function CanvasDataSourcePanel(props: {
                 <button
                   type="button"
                   onClick={props.onConfirmSelectedSource}
+                  title={`Keep querying ${props.sourceMismatch.selectedName}`}
                   className="rounded-full border border-line bg-card px-2.5 py-1 font-semibold text-muted transition hover:bg-hover hover:text-ink"
                 >
                   Keep {props.sourceMismatch.selectedName}
@@ -345,6 +348,7 @@ function CanvasDataSourcePanel(props: {
         <button
           type="button"
           onClick={props.onConnectData}
+          title="Add a database or file to query"
           className="flex h-10 w-full items-center justify-center rounded-full border border-line bg-card text-[13px] font-semibold text-muted transition hover:bg-hover hover:text-ink"
         >
           Connect data
@@ -1424,6 +1428,7 @@ function CanvasInner(props: {
                       <button
                         type="button"
                         aria-label="Resize panel"
+                        title="Drag to resize"
                         onMouseDown={() => startLeftPanelResize("right")}
                         className={cn(
                           "absolute right-0 top-0 z-10 h-full w-3 translate-x-1/2 cursor-ew-resize",
@@ -1434,6 +1439,7 @@ function CanvasInner(props: {
                       <button
                         type="button"
                         aria-label="Resize panel height from top"
+                        title="Drag to resize"
                         onMouseDown={() => startLeftPanelResize("top")}
                         className={cn(
                           "absolute left-0 top-0 z-10 h-3 w-full -translate-y-1/2 cursor-ns-resize",
@@ -1444,6 +1450,7 @@ function CanvasInner(props: {
                       <button
                         type="button"
                         aria-label="Resize panel height from bottom"
+                        title="Drag to resize"
                         onMouseDown={() => startLeftPanelResize("bottom")}
                         className={cn(
                           "absolute bottom-0 left-0 z-10 h-3 w-full translate-y-1/2 cursor-ns-resize",
@@ -1454,24 +1461,28 @@ function CanvasInner(props: {
                       <button
                         type="button"
                         aria-label="Resize panel from top left"
+                        title="Drag to resize"
                         onMouseDown={() => startLeftPanelResize("topLeft")}
                         className="absolute left-0 top-0 z-20 h-5 w-5 -translate-x-1/3 -translate-y-1/3 cursor-nwse-resize"
                       />
                       <button
                         type="button"
                         aria-label="Resize panel from top right"
+                        title="Drag to resize"
                         onMouseDown={() => startLeftPanelResize("topRight")}
                         className="absolute right-0 top-0 z-20 h-5 w-5 translate-x-1/3 -translate-y-1/3 cursor-nesw-resize"
                       />
                       <button
                         type="button"
                         aria-label="Resize panel from bottom left"
+                        title="Drag to resize"
                         onMouseDown={() => startLeftPanelResize("bottomLeft")}
                         className="absolute bottom-0 left-0 z-20 h-5 w-5 -translate-x-1/3 translate-y-1/3 cursor-nesw-resize"
                       />
                       <button
                         type="button"
                         aria-label="Resize panel from bottom right"
+                        title="Drag to resize"
                         onMouseDown={() => startLeftPanelResize("bottomRight")}
                         className="absolute bottom-0 right-0 z-20 h-5 w-5 translate-x-1/3 translate-y-1/3 cursor-nwse-resize"
                       />
@@ -1534,6 +1545,7 @@ function CanvasInner(props: {
                     <button
                       type="button"
                       onClick={props.onConnectData}
+                      title="Add a database or file to query"
                       className="rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-invert-ink transition hover:opacity-90"
                     >
                       Connect data
@@ -1552,6 +1564,7 @@ function CanvasInner(props: {
                 />
                 <button
                   onClick={props.backToResult}
+                  title="Return to the result view"
                   className="flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12px] font-medium text-ink shadow-sm hover:bg-hover"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />

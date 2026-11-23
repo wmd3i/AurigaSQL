@@ -42,6 +42,7 @@ export function CanvasComposer(props: {
             <span className="truncate">answering: {(props.answerTarget?.pendingQuestion ?? "").slice(0, 48)}</span>
             <button
               aria-label="Cancel answering"
+              title="Stop answering this thread"
               onClick={props.onClearTarget}
               className="shrink-0 opacity-60 hover:opacity-100"
             >
@@ -54,6 +55,7 @@ export function CanvasComposer(props: {
       {!expanded && !answering ? (
         <button
           onClick={() => setExpanded(true)}
+          title="Click to write a new question"
           className="flex w-full items-center rounded-[28px] bg-card/95 px-6 py-4 text-left shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-line/60 transition-colors hover:bg-card"
         >
           <span className="truncate text-[15px] text-faint">Ask a new question...</span>
@@ -78,6 +80,7 @@ export function CanvasComposer(props: {
               {!answering && !draft.trim() && (
                 <button
                   onClick={() => setExpanded(false)}
+                  title="Shrink the composer"
                   className="text-[11px] text-faint transition-colors hover:text-ink"
                 >
                   Collapse
@@ -85,6 +88,7 @@ export function CanvasComposer(props: {
               )}
                 <button
                   aria-label="Send"
+                  title="Send question"
                   onClick={submit}
                   disabled={!draft.trim()}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-invert text-invert-ink hover:opacity-90 disabled:cursor-not-allowed disabled:bg-hover disabled:text-faint disabled:opacity-100 disabled:hover:opacity-100"

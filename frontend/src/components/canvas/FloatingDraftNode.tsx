@@ -118,6 +118,7 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
           }}
           className="flex h-8 items-center gap-1.5 rounded-full px-2 transition-colors hover:bg-hover"
           aria-label="Copy content"
+          title="Copy to clipboard"
         >
           {copied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
           <span>{copied ? "Copied" : "Copy"}</span>
