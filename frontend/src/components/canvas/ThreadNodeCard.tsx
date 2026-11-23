@@ -13,7 +13,6 @@ import {
   RotateCcw,
   Sparkles,
   Terminal,
-  Trash2,
   Wrench,
   X,
   type LucideIcon,
@@ -47,7 +46,6 @@ export type CardData = {
   onBranch?: (prompt: string) => void | Promise<void>;
   onBranchTool?: (tool: ThreadNode, prompt: string) => void | Promise<void>;
   onCreateBranchDraft?: (kind: "follow_up" | "fork") => void;
-  onDeleteThread?: () => void;
   onRevert?: () => void;
   onAnswer?: (text: string) => void;
   onInspectTool?: (tool: ThreadNode, openDetail?: boolean) => void;
@@ -601,7 +599,7 @@ function ToolGroupCard(props: {
 }
 
 export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
-  const { tn, pulse, footer, onHeightChange, onBranchTool, onAnswer, onInspectTool, onCreateBranchDraft, onDeleteThread, onRevert, branchOrigin, compact } = data;
+  const { tn, pulse, footer, onHeightChange, onBranchTool, onAnswer, onInspectTool, onCreateBranchDraft, onRevert, branchOrigin, compact } = data;
   const modelLabel = useSelectedModelLabel();
   const [detailsOpen, setDetailsOpen] = useState(false); // fold level 1
   const [copied, setCopied] = useState(false);
@@ -843,20 +841,6 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
             >
               <RotateCcw className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
               <span>Revert</span>
-            </button>
-          )}
-          {onDeleteThread && (
-            <button
-              type="button"
-              onClick={onDeleteThread}
-              className={cn(
-                "flex items-center rounded-full text-danger transition-colors hover:bg-danger-soft",
-                compact ? "h-6 gap-1 px-1" : "h-[28px] gap-1 px-1.5",
-              )}
-              aria-label="Delete thread"
-            >
-              <Trash2 className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-              <span>Delete</span>
             </button>
           )}
         </div>

@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { ArrowUp, Check, Copy, GripVertical, Trash2 } from "lucide-react";
+import { ArrowUp, Check, Copy, GripVertical } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { ModelPicker } from "../ModelPicker";
 import { CANVAS_TONES, type CanvasToneId } from "../../lib/canvasTones";
 
 export type FloatingDraftData = {
-  onClose: () => void;
   onSubmit: (text: string, toneId: CanvasToneId) => boolean | void | Promise<boolean | void>;
   onOpenLlmConfig?: () => void;
   title?: string;
@@ -122,18 +121,6 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
         >
           {copied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
           <span>{copied ? "Copied" : "Copy"}</span>
-        </button>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            data.onClose();
-          }}
-          className="flex h-8 items-center gap-1.5 rounded-full px-2 text-danger transition-colors hover:bg-danger-soft"
-          aria-label="Delete draft"
-        >
-          <Trash2 className="h-4 w-4" />
-          <span>Delete</span>
         </button>
       </div>
 

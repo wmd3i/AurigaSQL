@@ -958,7 +958,6 @@ function CanvasInner(props: {
           position: { x: draft.x, y: draft.y },
           data: {
             onOpenLlmConfig: props.onOpenLlmConfig,
-            onClose: () => setFloatingDrafts((currentDrafts) => currentDrafts.filter((item) => item.id !== draft.id)),
             initialText: draft.initialText,
             initialTextToken: draft.initialTextToken,
             onSubmit: async (text: string, toneId: CanvasToneId) => {
@@ -981,10 +980,6 @@ function CanvasInner(props: {
             title: draft.kind === "fork" ? "Fork question" : "Follow-up question",
             placeholder: draft.kind === "fork" ? "Explore a parallel direction..." : "Ask a follow-up from this card...",
             onOpenLlmConfig: props.onOpenLlmConfig,
-            onClose: () => {
-              setBranchDrafts((currentDrafts) => currentDrafts.filter((item) => item.id !== draft.id));
-              setSelectedBranchDraftId((current) => (current === draft.id ? null : current));
-            },
             onSubmit: async (text: string, toneId: CanvasToneId) => {
               const started = await startCanvasQuestion(text, { ...draft.target, branchKind: draft.kind }, toneId);
               if (!started) return false;
@@ -1114,7 +1109,6 @@ function CanvasInner(props: {
                         branchKind: kind,
                       }, kind)
                   : undefined,
-              onDeleteThread: () => props.onDeleteConversation(conv.id),
               onRevert:
                 !props.onRevertConversation || (gi === 0 && tn.kind === "question" && !branchOrigin)
                   ? undefined
