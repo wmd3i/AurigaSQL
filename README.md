@@ -190,12 +190,16 @@ Build distributable artifacts:
 
 ```bash
 npm run dist:desktop:mac-arm64
+npm run dist:desktop:mac-x64
 npm run dist:desktop:win-x64
 ```
 
-Artifacts are written under `frontend/release/`. macOS ARM64 packaging has been
-functionally validated. The Windows x64 build path is present but remains
-experimental and should be validated on a Windows machine before release.
+Artifacts are written under `frontend/release/`. Build macOS ARM64 on Apple
+Silicon, macOS x64 on an Intel Mac, and Windows x64 on Windows so the packaged
+PyInstaller backend has the same architecture as Electron and `llama-server`.
+The packaging command validates the runtime and backend architectures before
+creating the app. Windows x64 remains experimental and should be validated on a
+Windows machine before release.
 
 The public project does not ship Apple signing or notarization credentials.
 Unsigned macOS builds may require users to approve the app in macOS privacy and
@@ -203,13 +207,20 @@ security settings.
 
 ## Local GGUF Models
 
-The desktop package includes platform-specific `llama.cpp` runtime files. In
-AurigaSQL Settings, the local demo model flow can download a supported GGUF model
-into the local user-data directory and start `llama-server` on demand.
+The repo contains platform-specific `llama.cpp` runtimes for macOS ARM64,
+macOS Intel x64, and Windows x64. Web development mode selects the runtime for
+the current machine; each desktop package includes only its target platform's
+files. Users do not need to install Ollama or `llama.cpp` for the local Demo
+flow. These runtimes are tracked in the repository rather than installed by
+`npm ci`.
 
-For development, runtime locations and the local model port can be overridden
-with the `AURIGASQL_LLAMA_SERVER_PATH` and
-`AURIGASQL_LOCAL_MODEL_PORT` variables shown in `.env.example`.
+In AurigaSQL Settings, the local Demo flow downloads the Qwen3 1.7B Q4_K_M GGUF
+model into the local user-data directory and starts `llama-server` on demand.
+The large GGUF model is intentionally not stored in this repository.
+
+Advanced development setups can override the selected executable and local
+model port with `AURIGASQL_LLAMA_SERVER_PATH` and
+`AURIGASQL_LOCAL_MODEL_PORT`, as shown in `.env.example`.
 
 ## License
 
