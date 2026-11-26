@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
-import { Anthropic, Gemini, Minimax, OpenAI, XAI, ZAI } from "@lobehub/icons";
+import { Anthropic, Gemini, Kimi, Minimax, OpenAI, XAI, ZAI } from "@lobehub/icons";
 import { Check, ChevronDown, Plus, Settings2, Sparkles } from "lucide-react";
 import { useModels } from "../state/modelContext";
 import { cn } from "../lib/cn";
@@ -11,6 +11,7 @@ const PROVIDER_LOGO: Record<string, ComponentType<{ size: number }>> = {
   zai: ZAI.Avatar,
   openai: OpenAI.Avatar,
   xai: XAI.Avatar,
+  kimi: Kimi.Avatar,
 };
 
 export function ModelPicker(props: {
