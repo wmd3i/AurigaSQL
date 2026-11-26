@@ -53,7 +53,7 @@ function canvasWorkKey(conversationsById: Map<string, Conversation>, conv: Conve
 }
 
 function aggregateStatus(conversations: Conversation[]): Pick<CanvasWork, "status" | "turnInFlight"> {
-  const turnInFlight = conversations.some((c) => c.turnInFlight || c.status === "starting" || c.status === "active");
+  const turnInFlight = conversations.some((c) => c.status !== "waiting_user" && (c.turnInFlight || c.status === "starting" || c.status === "active"));
   if (turnInFlight) return { status: "active", turnInFlight: true };
   if (conversations.some((c) => c.status === "waiting_user")) return { status: "waiting_user", turnInFlight: false };
   if (conversations.some((c) => c.status === "error")) return { status: "error", turnInFlight: false };

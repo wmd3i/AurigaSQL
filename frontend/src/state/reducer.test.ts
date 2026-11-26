@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reducer } from "./reducer";
+import { buildNodes } from "../lib/buildNodes";
 import { initialState, type AppState } from "./types";
 
 const started: AppState = reducer(initialState, {
@@ -127,13 +128,13 @@ describe("reducer", () => {
     expect(s.conversations[0].status).toBe("active");
   });
 
-  it("SSE_EVENT pending_question sets pendingQuestion + waiting_user, not added to timeline", () => {
+  it("SSE_EVENT pending_question sets pendingQuestion + waiting_user and an answerable card", () => {
     const s = reducer(started, {
       type: "SSE_EVENT", id: "t1", event: { type: "pending_question", text: "which year?" },
     });
     expect(s.conversations[0].pendingQuestion).toBe("which year?");
     expect(s.conversations[0].status).toBe("waiting_user");
-    expect(s.conversations[0].timeline).toHaveLength(0);
+    expect(buildNodes(s.conversations[0].timeline, "q").at(-1)).toMatchObject({ kind: "agent_question", body: "which year?" });
   });
 
   it("SSE_EVENT clarification_request sets pendingQuestion + waiting_user", () => {
@@ -142,7 +143,7 @@ describe("reducer", () => {
     });
     expect(s.conversations[0].pendingQuestion).toBe("which year?");
     expect(s.conversations[0].status).toBe("waiting_user");
-    expect(s.conversations[0].timeline).toHaveLength(0);
+    expect(buildNodes(s.conversations[0].timeline, "q").at(-1)).toMatchObject({ kind: "agent_question", body: "which year?" });
   });
 
   it("SSE_EVENT final_answer marks the conversation done without submit_sql", () => {
@@ -445,4 +446,68 @@ describe("reducer", () => {
     expect(s.activeId).toBeNull();
     expect(s.view).toBe("home");
   });
+});
+
+
+describe("clarification lifecycle", () => {
+  it("keeps waiting across progress events and resumes on an accepted answer", () => {
+    let s = reducer(started, { type: "TURN_SENT", id: "t1" });
+    s = reducer(s, { type: "SSE_EVENT", id: "t1", event: { type: "clarification_request", question: "Which drivers?" } });
+    s = reducer(s, { type: "SSE_EVENT", id: "t1", event: { type: "assistant_text", text: "Checking" } });
+    expect(s.conversations[0].status).toBe("waiting_user");
+    s = reducer(s, { type: "SSE_EVENT", id: "t1", event: { type: "clarification_answer", answer: "All drivers" } });
+    expect(s.conversations[0].pendingQuestion).toBeNull();
+    expect(s.conversations[0].status).toBe("active");
+    expect(buildNodes(s.conversations[0].timeline, "q").find((n) => n.kind === "agent_question"))
+      .toMatchObject({ body: "Which drivers?", answer: "All drivers" });
+  });
+
+  it("restores a waiting question from a snapshot even when event count is unchanged", () => {
+    const events = [{ type: "user_message" as const, text: "q" }];
+    let s = reducer(started, { type: "SYNC_AGENT_EVENTS", id: "t1", events });
+    s = reducer(s, { type: "SYNC_SESSION_STATE", id: "t1", state: {
+      agent_events: events, execution_status: "waiting_user", pending_question: "Which drivers?", task_done: false,
+    } });
+    expect(s.conversations[0]).toMatchObject({ status: "waiting_user", pendingQuestion: "Which drivers?", turnInFlight: true });
+    expect(s.answerTarget).toBe("t1");
+    s = reducer(s, { type: "SYNC_SESSION_STATE", id: "t1", state: {
+      agent_events: events, execution_status: "done", pending_question: null, task_done: true,
+    } });
+    expect(s.conversations[0]).toMatchObject({ status: "done", pendingQuestion: null, turnInFlight: false });
+    expect(s.answerTarget).toBeNull();
+  });
+
+  it("ignores a stale HTTP snapshot behind the SSE stream", () => {
+    const s = reducer(started, { type: "SSE_EVENT", id: "t1", event: { type: "clarification_request", question: "Which?" } });
+    const restored = reducer(s, { type: "SYNC_SESSION_STATE", id: "t1", state: { agent_events: [], task_done: true } });
+    expect(restored.conversations[0].status).toBe("waiting_user");
+  });
+});
+
+
+it("does not duplicate restored cards when EventSource replays its backlog", () => {
+  const events = [
+    { type: "user_message" as const, text: "q" },
+    { type: "clarification_request" as const, question: "Which?" },
+  ];
+  let s = reducer(started, { type: "SYNC_SESSION_STATE", id: "t1", state: {
+    agent_events: events, pending_question: "Which?", execution_status: "waiting_user",
+  } });
+  for (const [eventIndex, event] of events.entries()) {
+    s = reducer(s, { type: "SSE_EVENT", id: "t1", event, eventIndex });
+  }
+  expect(s.conversations[0].rawEvents).toHaveLength(2);
+  expect(buildNodes(s.conversations[0].timeline, "q").filter((n) => n.kind === "question")).toHaveLength(1);
+  expect(s.conversations[0].pendingQuestion).toBe("Which?");
+});
+
+
+it("keeps an in-flight start visible when its initial session probe returns idle", () => {
+  let s = reducer(started, { type: "TURN_SENT", id: "t1" });
+  s = reducer(s, { type: "SYNC_SESSION_STATE", id: "t1", state: {
+    agent_events: [], execution_status: "idle", task_done: false,
+  } });
+  expect(s.conversations[0].turnInFlight).toBe(true);
+  s = reducer(s, { type: "SSE_EVENT", id: "t1", event: { type: "runtime_status", status: "running" } });
+  expect(s.conversations[0]).toMatchObject({ status: "active", turnInFlight: true });
 });

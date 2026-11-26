@@ -138,17 +138,19 @@ export function reducer(state: AppState, action: Action): AppState {
         error: null,
       }));
     case "SSE_EVENT": {
-      if (action.event.type === "pending_question") {
-        const text = action.event.text;
+      const conversation = state.conversations.find((c) => c.id === action.id);
+      // A new EventSource replays the backend log after a page reload. Its
+      // stable event index makes that replay idempotent with persisted history.
+      if (action.eventIndex !== undefined && conversation && action.eventIndex < conversation.rawEvents.length) return state;
+      if (action.event.type === "pending_question" || action.event.type === "clarification_request") {
+        const question = action.event.type === "pending_question" ? action.event.text : action.event.question;
         return {
-          ...patch(state, action.id, (c) => ({ ...c, pendingQuestion: text, status: "waiting_user" })),
-          answerTarget: action.id,
-        };
-      }
-      if (action.event.type === "clarification_request") {
-        const question = action.event.question;
-        return {
-          ...patch(state, action.id, (c) => ({ ...c, pendingQuestion: question, status: "waiting_user" })),
+          ...patch(state, action.id, (c) => {
+            if (c.status === "done" || c.status === "stopped") return c;
+            const rawEvents: RawAgentEvent[] = c.pendingQuestion === question ? c.rawEvents
+              : [...c.rawEvents, { type: "clarification_request", question }];
+            return { ...c, rawEvents, timeline: buildTimeline(rawEvents), pendingQuestion: question, status: "waiting_user", turnInFlight: true };
+          }),
           answerTarget: action.id,
         };
       }
@@ -160,16 +162,41 @@ export function reducer(state: AppState, action: Action): AppState {
         // Terminal states (one-shot "done", user "stopped") must not be reopened
         // by trailing events (submit ack, late-arriving tool output).
         const terminal = c.status === "done" || c.status === "stopped";
-        const status = terminal ? c.status : isError ? "error" : isDone ? "done" : "active";
+        const answered = evt.type === "clarification_answer";
+        const running = evt.type === "runtime_status" && evt.status === "running";
+        const pendingQuestion = answered || running || isDone || isError ? null : c.pendingQuestion;
+        const status = terminal ? c.status : isError ? "error" : isDone ? "done" : pendingQuestion ? "waiting_user" : "active";
         return {
           ...c,
           rawEvents,
           timeline: buildTimeline(rawEvents),
+          pendingQuestion,
           status,
-          turnInFlight: isDone || isError || status === "done" || status === "stopped" ? false : c.turnInFlight,
+          turnInFlight: isDone || isError || status === "done" || status === "stopped" ? false : running || c.turnInFlight,
           error: isError ? evt.message : null,
         };
       });
+    }
+    case "SYNC_SESSION_STATE": {
+      const snapshot = action.state;
+      const events = Array.isArray(snapshot.agent_events) ? snapshot.agent_events as RawAgentEvent[] : [];
+      const next = patch(state, action.id, (c) => {
+        // Do not overwrite a newer SSE stream with an older HTTP snapshot.
+        if (events.length < c.rawEvents.length) return c;
+        const pendingQuestion = typeof snapshot.pending_question === "string" ? snapshot.pending_question : null;
+        const stopped = snapshot._cancelled === true;
+        const error = typeof snapshot.error === "string" ? snapshot.error : null;
+        const done = snapshot.task_done === true;
+        const running = snapshot.execution_status === "running";
+        const status = stopped ? "stopped" : error ? "error" : done ? "done" : pendingQuestion ? "waiting_user" : running ? "active" : statusFromEvents(events, c.status);
+        return {
+          ...c, rawEvents: events, timeline: buildTimeline(events),
+          pendingQuestion: stopped || done || error ? null : pendingQuestion,
+          status, error, turnInFlight: !stopped && !done && !error && (running || !!pendingQuestion || (snapshot.execution_status === "idle" && c.turnInFlight)),
+        };
+      });
+      const restored = next.conversations.find((c) => c.id === action.id);
+      return { ...next, answerTarget: restored?.pendingQuestion ? action.id : next.answerTarget === action.id ? null : next.answerTarget };
     }
     case "SYNC_AGENT_EVENTS":
       return patch(state, action.id, (c) => {
@@ -208,7 +235,7 @@ export function reducer(state: AppState, action: Action): AppState {
     case "SET_SUMMARY":
       return patch(state, action.id, (c) => ({ ...c, summary: action.summary }));
     case "ANSWER_SENT": {
-      const next = patch(state, action.id, (c) => ({ ...c, pendingQuestion: null, status: "active" }));
+      const next = patch(state, action.id, (c) => ({ ...c, pendingQuestion: null, status: c.status === "waiting_user" ? "active" : c.status }));
       return state.answerTarget === action.id ? { ...next, answerTarget: null } : next;
     }
     case "CONV_ERROR":

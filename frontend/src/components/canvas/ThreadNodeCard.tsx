@@ -47,7 +47,7 @@ export type CardData = {
   onBranchTool?: (tool: ThreadNode, prompt: string) => void | Promise<void>;
   onCreateBranchDraft?: (kind: "follow_up" | "fork") => void;
   onRevert?: () => void;
-  onAnswer?: (text: string) => void;
+  onAnswer?: (text: string) => void | Promise<void>;
   onInspectTool?: (tool: ThreadNode, openDetail?: boolean) => void;
   branchOrigin?: { label: string; kind?: "follow_up" | "fork" };
   expandAllToken?: number;
@@ -607,6 +607,8 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
   const [detailsOpen, setDetailsOpen] = useState(false); // fold level 1
   const [copied, setCopied] = useState(false);
   const [answerDraft, setAnswerDraft] = useState("");
+  const [answerSubmitting, setAnswerSubmitting] = useState(false);
+  const answerPendingRef = useRef(false);
   const [showRecoveryHint, setShowRecoveryHint] = useState(false);
   const [restartingBackend, setRestartingBackend] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -694,11 +696,18 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
     }
   }
 
-  function submitAnswer() {
+  async function submitAnswer() {
     const text = answerDraft.trim();
-    if (!text || !onAnswer) return;
-    onAnswer(text);
-    setAnswerDraft("");
+    if (!text || !onAnswer || answerPendingRef.current) return;
+    answerPendingRef.current = true;
+    setAnswerSubmitting(true);
+    try {
+      await onAnswer(text);
+      setAnswerDraft("");
+    } finally {
+      answerPendingRef.current = false;
+      setAnswerSubmitting(false);
+    }
   }
 
   useLayoutEffect(() => {
@@ -737,7 +746,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
             <div className="nopan mt-3 rounded-xl border border-line bg-canvas px-3 py-2 text-[12px] leading-snug text-muted">
               <div className="font-medium text-ink">Still working?</div>
               <div className="mt-1">
-                Use Pause in the toolbar, reload the window, or restart the bundled service.
+                The agent has not returned a result yet. Reload to check its latest state. Reloading does not cancel the request.
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -963,7 +972,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
             {isAnswer && <div className="mb-1 text-[11px] font-medium text-accent">Final Result</div>}
             {tn.kind === "agent_question" && (
               <div className="mb-1 text-[11px] font-medium text-accent">
-                AurigaSQL asks{pulse && " — reply here"}
+                AurigaSQL asks{pulse && " — waiting for your answer"}
               </div>
             )}
 
@@ -987,6 +996,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
                 <textarea
                   rows={3}
                   value={answerDraft}
+                  readOnly={answerSubmitting}
                   onChange={(e) => setAnswerDraft(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -1000,7 +1010,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
                 <div className="mt-2 flex items-center justify-end">
                   <button
                     onClick={submitAnswer}
-                    disabled={!answerDraft.trim()}
+                    disabled={!answerDraft.trim() || answerSubmitting}
                     className="flex h-8 w-8 items-center justify-center rounded-full bg-invert text-invert-ink hover:opacity-90 disabled:opacity-40"
                     aria-label="Send answer"
                   >

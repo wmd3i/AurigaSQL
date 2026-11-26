@@ -363,7 +363,7 @@ function CanvasInner(props: {
   canvasDb: string;
   activeId: string | null;
   onStart: (database: string, query: string, branchTarget?: BranchTarget | null, canvasTone?: CanvasToneId) => Promise<boolean | void>;
-  onAnswer: (id: string, text: string) => void;
+  onAnswer: (id: string, text: string) => void | Promise<void>;
   onStop: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onRevertConversation?: (id: string, nodeId: string) => void;
@@ -423,6 +423,9 @@ function CanvasInner(props: {
 
   const threadNodes = useCallback((conv: Conversation): CardContent[] => {
     const base = buildNodes(conv.timeline, conv.title);
+    if (conv.pendingQuestion && !base.some((node) => node.kind === "agent_question" && node.body === conv.pendingQuestion && node.answer === undefined)) {
+      base.push({ id: "pending-question", kind: "agent_question", body: conv.pendingQuestion });
+    }
     const tail = syntheticTail(conv);
     const nodes = [...base, ...(tail ? [tail] : [])];
     return nodes.filter((node) => !isRedundantFinalTextNode(node, nodes));
@@ -1095,7 +1098,7 @@ function CanvasInner(props: {
             selected: existing?.selected,
             data: {
               tn,
-              pulse: tn.kind === "agent_question" && conv.pendingQuestion !== null && isLast,
+              pulse: tn.kind === "agent_question" && tn.body === conv.pendingQuestion && tn.answer === undefined,
               footer: isLast && conv.status === "done" ? { state: "ended" } : null,
               branchOrigin: gi === 0 && branchOrigin ? branchOrigin : undefined,
               canvasTone: gi === 0 && tn.kind === "question" ? conv.canvasTone : undefined,
@@ -1131,7 +1134,7 @@ function CanvasInner(props: {
                     }
                   : undefined,
               onAnswer:
-                tn.kind === "agent_question" && conv.pendingQuestion !== null && isLast
+                tn.kind === "agent_question" && tn.body === conv.pendingQuestion && tn.answer === undefined
                   ? (text) => props.onAnswer(conv.id, text)
                   : undefined,
               onInspectTool:

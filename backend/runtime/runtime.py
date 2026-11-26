@@ -32,7 +32,7 @@ except Exception:
     except Exception:
         pass
 
-from dbagent.agents.dbtools import DBType, MYSQL_DSN_ENV, POSTGRES_DSN_ENV
+from dbagent.agents.dbtools import database_connection_scope
 from dbagent.agents.sql_agent import SQLAgent
 from dbagent.config import AgentConfig
 from dbagent.connectors.base import LLMConnector, LLMResponse, UsageStats
@@ -137,9 +137,6 @@ class DbAgentRuntime:
         self.event_bus = EventBus()
         self._sessions: dict[str, SessionState] = {}
         self._lock = asyncio.Lock()
-        # Database tools read DSNs from process environment variables, so turns
-        # must remain serial while each session installs its own connection.
-        self._agent_run_lock = asyncio.Lock()
 
     async def init_session(
         self,
@@ -177,12 +174,17 @@ class DbAgentRuntime:
         state = self._sessions.get(task_id)
         if state is None:
             raise KeyError(f"no session for task {task_id}")
+        if state.running:
+            raise ValueError("A turn is already running for this session")
         if model:
             state.model = model
         state.cancelled = False
+        state.done = False
+        state.error = None
         state.running = True
         user_evt = {"type": "user_message", "text": message}
         self._publish_event(state, user_evt)
+        self._publish_event(state, {"type": "runtime_status", "status": "running"})
 
         start_index = len(state.trajectory)
         stop_aux = asyncio.Event()
@@ -190,14 +192,13 @@ class DbAgentRuntime:
         ipc_task: Optional[asyncio.Task[None]] = None
         streamed_index = start_index
         try:
-            async with self._agent_run_lock:
-                state.ipc_dir = self._ipc_dir_for_task(task_id)
-                stream_task = asyncio.create_task(self._stream_trajectory_file(state, start_index, stop_aux))
-                ipc_task = asyncio.create_task(self._bridge_ipc_requests(state, stop_aux))
-                output = await asyncio.to_thread(self._run_agent_sync, state, message)
-                stop_aux.set()
-                streamed_index = await stream_task
-                await ipc_task
+            state.ipc_dir = self._ipc_dir_for_task(task_id)
+            stream_task = asyncio.create_task(self._stream_trajectory_file(state, start_index, stop_aux))
+            ipc_task = asyncio.create_task(self._bridge_ipc_requests(state, stop_aux))
+            output = await asyncio.to_thread(self._run_agent_sync, state, message)
+            stop_aux.set()
+            streamed_index = await stream_task
+            await ipc_task
             state.trajectory = list(output.trajectory or [])
             self._publish_trajectory_items(
                 state,
@@ -264,8 +265,10 @@ class DbAgentRuntime:
             raise KeyError(f"no session for task {task_id}")
         if state.pending_answer is None or state.pending_answer.done():
             return False
-        state.pending_answer.set_result(answer)
+        self._publish_event(state, {"type": "clarification_answer", "answer": answer})
         state.pending_question = None
+        self._publish_event(state, {"type": "runtime_status", "status": "running"})
+        state.pending_answer.set_result(answer)
         return True
 
     def public_state(self, task_id: str) -> dict[str, Any]:
@@ -287,6 +290,13 @@ class DbAgentRuntime:
             "_last_sql_raw": state.final_sql,
             "_freechat_result": state.final_result,
             "pending_question": state.pending_question,
+            "execution_status": (
+                "stopped" if state.cancelled else
+                "error" if state.error else
+                "done" if state.done else
+                "waiting_user" if state.pending_question else
+                "running" if state.running else "idle"
+            ),
             "error": state.error,
         }
 
@@ -306,13 +316,7 @@ class DbAgentRuntime:
         )
         prompt = self._build_prompt(state, message)
         run_config = state.data_session.run_config
-        previous_postgres_dsn = os.environ.get(POSTGRES_DSN_ENV)
-        previous_mysql_dsn = os.environ.get(MYSQL_DSN_ENV)
-        if run_config.db_type == DBType.POSTGRES and run_config.db_path:
-            os.environ[POSTGRES_DSN_ENV] = run_config.db_path
-        if run_config.db_type == DBType.MYSQL and run_config.db_path:
-            os.environ[MYSQL_DSN_ENV] = run_config.db_path
-        try:
+        with database_connection_scope(run_config.db_type, run_config.db_path):
             persist_agent_logs = os.getenv("AURIGASQL_ENABLE_LLM_LOGGER", "").lower() == "true"
             kwargs: dict[str, Any] = {
                 "ipc_dir": str(state.ipc_dir) if state.ipc_dir else None,
@@ -333,15 +337,6 @@ class DbAgentRuntime:
                 resume_messages=state.trajectory or None,
                 **kwargs,
             )
-        finally:
-            if previous_postgres_dsn is None:
-                os.environ.pop(POSTGRES_DSN_ENV, None)
-            else:
-                os.environ[POSTGRES_DSN_ENV] = previous_postgres_dsn
-            if previous_mysql_dsn is None:
-                os.environ.pop(MYSQL_DSN_ENV, None)
-            else:
-                os.environ[MYSQL_DSN_ENV] = previous_mysql_dsn
 
     def _build_prompt(self, state: SessionState, message: str) -> str:
         run_config = state.data_session.run_config
@@ -450,19 +445,33 @@ class DbAgentRuntime:
         resp_path = req_path.with_name(f"resp_{token}.json")
         kind = payload.get("kind")
         if kind == "ask":
-            answer = await self._request_user_answer(state, str(payload.get("question") or ""))
+            answer = await self._request_user_answer(state, str(payload.get("question") or ""), req_path)
             self._write_ipc_response(resp_path, {"answer": answer})
         else:
             self._write_ipc_response(resp_path, {"error": f"Unsupported IPC request kind: {kind}"})
 
-    async def _request_user_answer(self, state: SessionState, question: str) -> str:
+    async def _request_user_answer(self, state: SessionState, question: str, req_path: Optional[Path] = None) -> str:
         if state.cancelled:
             return "The user cancelled the request."
         loop = asyncio.get_running_loop()
         state.pending_question = question
         state.pending_answer = loop.create_future()
         self._publish_event(state, {"type": "clarification_request", "question": question})
-        return await state.pending_answer
+        self._publish_event(state, {"type": "runtime_status", "status": "waiting_user"})
+        try:
+            # The agent's IPC ask tool removes its request when its own timeout
+            # expires. Do not leave the host bridge waiting forever afterwards.
+            while True:
+                done, _ = await asyncio.wait([state.pending_answer], timeout=0.25)
+                if done:
+                    return state.pending_answer.result()
+                if req_path is not None and not req_path.exists():
+                    return "The clarification request expired."
+        finally:
+            state.pending_question = None
+            state.pending_answer = None
+            if not state.cancelled:
+                self._publish_event(state, {"type": "runtime_status", "status": "running"})
 
     @staticmethod
     def _write_ipc_response(path: Path, payload: dict[str, Any]) -> None:

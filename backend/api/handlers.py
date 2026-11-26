@@ -1407,6 +1407,8 @@ async def turn(req: TurnRequest):
         )
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
 
 
 async def answer_user(req: AnswerUserRequest):

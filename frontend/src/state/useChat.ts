@@ -4,7 +4,6 @@ import { openEventStream, type EventStreamHandle } from "../api/eventStream";
 import type { Action, CanvasScope, QueryMode } from "./types";
 import type { DataSource } from "../api/bff";
 import type { CanvasToneId } from "../lib/canvasTones";
-import type { RawAgentEvent } from "../lib/buildTimeline";
 
 type BranchFrom = {
   parentThreadId: string;
@@ -15,15 +14,6 @@ type BranchFrom = {
 
 function errorFromTurnState(state: Record<string, unknown>): string | null {
   return typeof state.error === "string" && state.error.trim() ? state.error : null;
-}
-
-function agentEventsFromTurnState(state: Record<string, unknown>): RawAgentEvent[] {
-  const events = state.agent_events;
-  if (!Array.isArray(events)) return [];
-  return events.filter((event): event is RawAgentEvent => {
-    if (!event || typeof event !== "object") return false;
-    return typeof (event as { type?: unknown }).type === "string";
-  });
 }
 
 export function useChat(dispatch: Dispatch<Action>) {
@@ -37,10 +27,7 @@ export function useChat(dispatch: Dispatch<Action>) {
       bff
         .session(taskId)
         .then((snapshot) => {
-          const events = agentEventsFromTurnState(snapshot.state);
-          if (events.length > 0) {
-            dispatch({ type: "SYNC_AGENT_EVENTS", id: taskId, events });
-          }
+          dispatch({ type: "SYNC_SESSION_STATE", id: taskId, state: snapshot.state });
         })
         .catch((error) => {
           const message = error instanceof Error ? error.message : String(error);
@@ -68,7 +55,7 @@ export function useChat(dispatch: Dispatch<Action>) {
       }
       const handle = openEventStream(
         taskId,
-        (event) => dispatch({ type: "SSE_EVENT", id: taskId, event }),
+        (event, eventIndex) => dispatch({ type: "SSE_EVENT", id: taskId, event, eventIndex }),
         () => dispatch({ type: "SSE_STATUS", id: taskId, connected: false }),
         () => dispatch({ type: "SSE_STATUS", id: taskId, connected: true }),
       );
@@ -122,10 +109,7 @@ export function useChat(dispatch: Dispatch<Action>) {
       bff
         .turn(started.task_id, query, "a-interact", model)
         .then((response) => {
-          const events = agentEventsFromTurnState(response.state);
-          if (events.length > 0) {
-            dispatch({ type: "SYNC_AGENT_EVENTS", id: started.task_id, events });
-          }
+          dispatch({ type: "SYNC_SESSION_STATE", id: started.task_id, state: response.state });
           const error = errorFromTurnState(response.state);
           if (error) {
             dispatch({ type: "CONV_ERROR", id: started.task_id, message: error });
@@ -191,10 +175,7 @@ export function useChat(dispatch: Dispatch<Action>) {
       bff
         .turn(taskId, message, "a-interact", model)
         .then((response) => {
-          const events = agentEventsFromTurnState(response.state);
-          if (events.length > 0) {
-            dispatch({ type: "SYNC_AGENT_EVENTS", id: taskId, events });
-          }
+          dispatch({ type: "SYNC_SESSION_STATE", id: taskId, state: response.state });
           const error = errorFromTurnState(response.state);
           if (error) {
             dispatch({ type: "CONV_ERROR", id: taskId, message: error });
@@ -223,9 +204,10 @@ export function useChat(dispatch: Dispatch<Action>) {
 
   const answerPending = useCallback(
     (taskId: string, answer: string) => {
-      bff
+      return bff
         .answerUser(taskId, answer)
-        .then(() => dispatch({ type: "ANSWER_SENT", id: taskId }))
+        .then(() => bff.session(taskId))
+        .then((snapshot) => dispatch({ type: "SYNC_SESSION_STATE", id: taskId, state: snapshot.state }))
         .catch((e) => dispatch({ type: "CONV_ERROR", id: taskId, message: String(e) }));
     },
     [dispatch],
