@@ -5,6 +5,8 @@ import os
 import re
 import sqlite3
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -36,6 +38,27 @@ class DBType(str, Enum):
 POSTGRES_DSN_ENV = "POSTGRES_DSN"
 MYSQL_DSN_ENV = "MYSQL_DSN"
 SQL_QUERY_TIMEOUT_SECS = 60
+
+# A bound turn must never fall back to another session's process credentials.
+_connection_dsns: ContextVar[dict[str, str | None] | None] = ContextVar("connection_dsns", default=None)
+
+
+@contextmanager
+def database_connection_scope(db_type: DBType, db_path: str | None):
+    token = _connection_dsns.set({
+        POSTGRES_DSN_ENV: db_path if db_type == DBType.POSTGRES else None,
+        MYSQL_DSN_ENV: db_path if db_type == DBType.MYSQL else None,
+    })
+    try:
+        yield
+    finally:
+        _connection_dsns.reset(token)
+
+
+def _connection_dsn(name: str) -> str | None:
+    bound = _connection_dsns.get()
+    return bound.get(name) if bound is not None else os.getenv(name)
+
 
 def dump_json(payload: Any) -> str:
     return json.dumps(payload, indent=2, default=str, ensure_ascii=False)
@@ -321,14 +344,14 @@ def run_duckdb_readonly(db_path: str, sql_text: str) -> str:
 def connect_postgres():
     if psycopg is None:
         raise RuntimeError("psycopg is not installed; postgres tools are unavailable")
-    dsn = os.getenv(POSTGRES_DSN_ENV)
+    dsn = _connection_dsn(POSTGRES_DSN_ENV)
     if not dsn:
         raise RuntimeError(f"missing env var {POSTGRES_DSN_ENV}")
     return psycopg.connect(dsn)
 
 
 def connect_mysql():
-    dsn = os.getenv(MYSQL_DSN_ENV)
+    dsn = _connection_dsn(MYSQL_DSN_ENV)
     if not dsn:
         raise RuntimeError(f"missing env var {MYSQL_DSN_ENV}")
     try:

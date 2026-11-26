@@ -99,8 +99,9 @@ export type Action =
       id: string;
       answer: string;
     }
-  | { type: "SSE_EVENT"; id: string; event: StreamEvent }
+  | { type: "SSE_EVENT"; id: string; event: StreamEvent; eventIndex?: number }
   | { type: "SYNC_AGENT_EVENTS"; id: string; events: RawAgentEvent[] }
+  | { type: "SYNC_SESSION_STATE"; id: string; state: Record<string, unknown> }
   | { type: "SSE_STATUS"; id: string; connected: boolean }
   | { type: "TURN_SENT"; id: string }
   | { type: "TURN_DONE"; id: string }

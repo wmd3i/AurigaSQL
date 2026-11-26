@@ -19,7 +19,7 @@ function isStreamEvent(value: unknown): value is StreamEvent {
 
 export function openEventStream(
   taskId: string,
-  onEvent: (evt: StreamEvent) => void,
+  onEvent: (evt: StreamEvent, eventIndex?: number) => void,
   onError?: (e: Event) => void,
   onOpen?: () => void,
 ): EventStreamHandle {
@@ -32,7 +32,8 @@ export function openEventStream(
         console.warn("Ignoring unexpected SSE payload:", parsed);
         return;
       }
-      onEvent(parsed);
+      const index = e.lastEventId ? Number(e.lastEventId) : undefined;
+      onEvent(parsed, index !== undefined && Number.isInteger(index) && index >= 0 ? index : undefined);
     } catch (err) {
       console.warn("SSE parse failed:", err, e.data);
     }
