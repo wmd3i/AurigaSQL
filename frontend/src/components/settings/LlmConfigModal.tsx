@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Anthropic, Gemini, Minimax, Ollama, OpenAI, XAI, ZAI } from "@lobehub/icons";
+import { Anthropic, Gemini, Kimi, Minimax, Ollama, OpenAI, XAI, ZAI } from "@lobehub/icons";
 import { ArrowLeft, Check, ChevronDown, KeyRound, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { bff, type LlmConfigsResponse, type LlmProfile, type LocalModelStatus } from "../../api/bff";
@@ -20,7 +20,7 @@ const LOCAL_DEMO_MODEL = {
 
 const DEMO_PROVIDER_LABEL = "Demo · Qwen3 1.7B (local)";
 
-type ProviderId = "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "ollama" | "other";
+type ProviderId = "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "kimi" | "ollama" | "other";
 
 type ModelOption = {
   value: string;
@@ -34,12 +34,13 @@ type ModelOption = {
 type ProviderLogo = ComponentType<{ size: number; className?: string }>;
 
 const PROVIDERS: Array<{ id: ProviderId; label: string }> = [
-  { id: "other", label: "Custom API" },
+  { id: "openai", label: "OpenAI" },
   { id: "anthropic", label: "Anthropic" },
   { id: "gemini", label: "Gemini" },
+  { id: "other", label: "OpenAI-compatible API" },
+  { id: "kimi", label: "Kimi" },
   { id: "minimax", label: "MiniMax" },
   { id: "ollama", label: "Ollama" },
-  { id: "openai", label: "OpenAI" },
   { id: "xai", label: "xAI" },
   { id: "zai", label: "Z.ai" },
 ];
@@ -51,23 +52,53 @@ const PROVIDER_LOGO: Record<ProviderId, ProviderLogo> = {
   anthropic: Anthropic.Avatar,
   minimax: Minimax.Avatar,
   xai: XAI.Avatar,
+  kimi: Kimi.Avatar,
   ollama: Ollama.Avatar,
   other: KeyRound,
 };
 
 const CUSTOM_MODEL_PLACEHOLDER: Record<ProviderId, string> = {
   other: "openai/your-model-name",
-  openai: "openai/gpt-5.5",
-  gemini: "gemini/gemini-3.5-flash",
-  zai: "openai/glm-5.2",
-  anthropic: "claude-opus-4-8",
-  minimax: "minimax/MiniMax-M3",
-  xai: "xai/grok-4.5",
+  openai: "openai/gpt-6.2-sol",
+  gemini: "gemini/gemini-3.8-flash",
+  zai: "openai/glm-5.3",
+  anthropic: "claude-opus-5-5",
+  minimax: "minimax/MiniMax-M3.1-Flash",
+  xai: "xai/grok-4.7",
+  kimi: "openai/kimi-k3.1-pro",
   ollama: "ollama_chat/glm-5.2:cloud",
 };
 
 const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   openai: [
+    {
+      value: "openai/gpt-6.2-astra",
+      label: "GPT-6.2 Astra",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "GPT-6.2 Astra",
+    },
+    {
+      value: "openai/gpt-6.2-sol",
+      label: "GPT-6.2 Sol",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "GPT-6.2 Sol",
+    },
+    {
+      value: "openai/gpt-6.1-terra",
+      label: "GPT-6.1 Terra",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "GPT-6.1 Terra",
+    },
+    {
+      value: "openai/gpt-6-luna",
+      label: "GPT-6 Luna",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "GPT-6 Luna",
+    },
     {
       value: "openai/gpt-5.5",
       label: "GPT-5.5",
@@ -104,34 +135,6 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       displayName: "GPT-5.4 Mini",
     },
     {
-      value: "openai/gpt-5.4-nano",
-      label: "GPT-5.4 Nano",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "GPT-5.4 Nano",
-    },
-    {
-      value: "openai/gpt-5.3-chat-latest",
-      label: "GPT-5.3 Chat",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "GPT-5.3 Chat",
-    },
-    {
-      value: "openai/gpt-5.2",
-      label: "GPT-5.2",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "GPT-5.2",
-    },
-    {
-      value: "openai/gpt-5.2-pro",
-      label: "GPT-5.2 Pro",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "GPT-5.2 Pro",
-    },
-    {
       value: CUSTOM_MODEL_VALUE,
       label: "Custom model",
       endpoint: "",
@@ -142,11 +145,53 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   ],
   gemini: [
     {
-      value: "gemini/gemini-3.5-flash",
-      label: "Gemini 3.5 Flash",
+      value: "gemini/gemini-4-carbon",
+      label: "Gemini 4 Carbon",
       endpoint: "",
       showEndpoint: false,
-      displayName: "Gemini 3.5 Flash",
+      displayName: "Gemini 4 Carbon",
+    },
+    {
+      value: "gemini/gemini-4-neon",
+      label: "Gemini 4 Neon",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 4 Neon",
+    },
+    {
+      value: "gemini/gemini-4-hydrogen",
+      label: "Gemini 4 Hydrogen",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 4 Hydrogen",
+    },
+    {
+      value: "gemini/gemini-4-argon",
+      label: "Gemini 4 Argon",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 4 Argon",
+    },
+    {
+      value: "gemini/gemini-3.8-flash",
+      label: "Gemini 3.8 Flash",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 3.8 Flash",
+    },
+    {
+      value: "gemini/gemini-3.6-flash",
+      label: "Gemini 3.6 Flash",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 3.6 Flash",
+    },
+    {
+      value: "gemini/gemini-3.5-flash-lite",
+      label: "Gemini 3.5 Flash-Lite",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 3.5 Flash-Lite",
     },
     {
       value: "gemini/gemini-3.1-pro-preview",
@@ -154,13 +199,6 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       endpoint: "",
       showEndpoint: false,
       displayName: "Gemini 3.1 Pro",
-    },
-    {
-      value: "gemini/gemini-3-pro-preview",
-      label: "Gemini 3 Pro",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 3 Pro",
     },
     {
       value: "gemini/gemini-3-flash-preview",
@@ -177,34 +215,6 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       displayName: "Gemini 3.1 Flash-Lite",
     },
     {
-      value: "gemini/gemini-2.5-pro",
-      label: "Gemini 2.5 Pro",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 2.5 Pro",
-    },
-    {
-      value: "gemini/gemini-2.5-flash",
-      label: "Gemini 2.5 Flash",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 2.5 Flash",
-    },
-    {
-      value: "gemini/gemini-2.5-flash-lite",
-      label: "Gemini 2.5 Flash-Lite",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 2.5 Flash-Lite",
-    },
-    {
-      value: "gemini/gemini-2.5-computer-use-preview-10-2025",
-      label: "Gemini 2.5 Computer Use",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 2.5 Computer Use",
-    },
-    {
       value: CUSTOM_MODEL_VALUE,
       label: "Custom model",
       endpoint: "",
@@ -215,67 +225,32 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   ],
   zai: [
     {
+      value: "openai/glm-5.4",
+      label: "GLM-5.4",
+      endpoint: "https://api.z.ai/api/coding/paas/v4",
+      showEndpoint: true,
+      displayName: "GLM-5.4",
+    },
+    {
+      value: "openai/glm-5.3",
+      label: "GLM-5.3",
+      endpoint: "https://api.z.ai/api/coding/paas/v4",
+      showEndpoint: true,
+      displayName: "GLM-5.3",
+    },
+    {
+      value: "openai/glm-5.3-flash",
+      label: "GLM-5.3 Flash",
+      endpoint: "https://api.z.ai/api/coding/paas/v4",
+      showEndpoint: true,
+      displayName: "GLM-5.3 Flash",
+    },
+    {
       value: "openai/glm-5.2",
       label: "GLM-5.2",
       endpoint: "https://api.z.ai/api/coding/paas/v4",
       showEndpoint: true,
       displayName: "GLM-5.2",
-    },
-    {
-      value: "openai/glm-5.1",
-      label: "GLM-5.1",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-5.1",
-    },
-    {
-      value: "openai/glm-5",
-      label: "GLM-5",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-5",
-    },
-    {
-      value: "openai/glm-4.7",
-      label: "GLM-4.7",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.7",
-    },
-    {
-      value: "openai/glm-4.6",
-      label: "GLM-4.6",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.6",
-    },
-    {
-      value: "openai/glm-4.5-air",
-      label: "GLM-4.5 Air",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.5 Air",
-    },
-    {
-      value: "openai/glm-4.5",
-      label: "GLM-4.5",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.5",
-    },
-    {
-      value: "openai/glm-4.6v",
-      label: "GLM-4.6V",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.6V",
-    },
-    {
-      value: "openai/glm-4.5v",
-      label: "GLM-4.5V",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.5V",
     },
     {
       value: CUSTOM_MODEL_VALUE,
@@ -287,6 +262,48 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
     },
   ],
   anthropic: [
+    {
+      value: "claude-fable-5-2",
+      label: "Claude Fable 5.2",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Fable 5.2",
+    },
+    {
+      value: "claude-opus-5-5",
+      label: "Claude Opus 5.5",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Opus 5.5",
+    },
+    {
+      value: "claude-sonnet-5-5",
+      label: "Claude Sonnet 5.5",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Sonnet 5.5",
+    },
+    {
+      value: "claude-haiku-5-5",
+      label: "Claude Haiku 5.5",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Haiku 5.5",
+    },
+    {
+      value: "claude-fable-5-1",
+      label: "Claude Fable 5.1",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Fable 5.1",
+    },
+    {
+      value: "claude-opus-5",
+      label: "Claude Opus 5",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Opus 5",
+    },
     {
       value: "claude-fable-5",
       label: "Claude Fable 5",
@@ -337,13 +354,6 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       displayName: "Claude Sonnet 4.6",
     },
     {
-      value: "claude-sonnet-4-5",
-      label: "Claude Sonnet 4.5",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Claude Sonnet 4.5",
-    },
-    {
       value: "claude-opus-4-5",
       label: "Claude Opus 4.5",
       endpoint: "",
@@ -361,126 +371,108 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   ],
   minimax: [
     {
+      value: "minimax/MiniMax-M3.1-Flash",
+      label: "MiniMax M3.1 Flash",
+      endpoint: "https://api.minimax.io/v1",
+      showEndpoint: false,
+      displayName: "MiniMax M3.1 Flash",
+    },
+    {
       value: "minimax/MiniMax-M3",
       label: "MiniMax M3",
       endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "MiniMax M3",
-    },
-    {
-      value: "minimax/MiniMax-M2.5",
-      label: "MiniMax M2.5",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2.5",
-    },
-    {
-      value: "minimax/MiniMax-M2.5-lightning",
-      label: "MiniMax M2.5 Lightning",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2.5 Lightning",
-    },
-    {
-      value: "minimax/MiniMax-M2.1",
-      label: "MiniMax M2.1",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2.1",
-    },
-    {
-      value: "minimax/MiniMax-M2.1-lightning",
-      label: "MiniMax M2.1 Lightning",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2.1 Lightning",
-    },
-    {
-      value: "minimax/MiniMax-M2",
-      label: "MiniMax M2",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2",
     },
     {
       value: CUSTOM_MODEL_VALUE,
       label: "Custom model",
       endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Custom MiniMax",
       custom: true,
     },
   ],
   xai: [
     {
+      value: "xai/grok-4.7",
+      label: "Grok 4.7",
+      endpoint: "https://api.x.ai",
+      showEndpoint: false,
+      displayName: "Grok 4.7",
+    },
+    {
+      value: "xai/grok-4.6",
+      label: "Grok 4.6",
+      endpoint: "https://api.x.ai",
+      showEndpoint: false,
+      displayName: "Grok 4.6",
+    },
+    {
       value: "xai/grok-4.5",
       label: "Grok 4.5",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Grok 4.5",
     },
     {
       value: "xai/grok-4.3",
       label: "Grok 4.3",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Grok 4.3",
     },
     {
       value: "xai/grok-4.20-0309-reasoning",
       label: "Grok 4.20 Reasoning",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Grok 4.20 Reasoning",
     },
     {
-      value: "xai/grok-4.20-beta-0309-non-reasoning",
+      value: "xai/grok-4.20-0309-non-reasoning",
       label: "Grok 4.20 Non-Reasoning",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Grok 4.20 Non-Reasoning",
-    },
-    {
-      value: "xai/grok-4-1-fast-reasoning",
-      label: "Grok 4.1 Fast Reasoning",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok 4.1 Fast Reasoning",
-    },
-    {
-      value: "xai/grok-4-1-fast-non-reasoning",
-      label: "Grok 4.1 Fast Non-Reasoning",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok 4.1 Fast Non-Reasoning",
-    },
-    {
-      value: "xai/grok-4",
-      label: "Grok 4",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok 4",
-    },
-    {
-      value: "xai/grok-code-fast-1",
-      label: "Grok Code Fast 1",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok Code Fast 1",
-    },
-    {
-      value: "xai/grok-3-mini",
-      label: "Grok 3 Mini",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok 3 Mini",
     },
     {
       value: CUSTOM_MODEL_VALUE,
       label: "Custom model",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Custom Grok",
+      custom: true,
+    },
+  ],
+  kimi: [
+    {
+      value: "openai/kimi-k3.1-pro",
+      label: "Kimi K3.1 Pro",
+      endpoint: "https://api.moonshot.ai/v1",
+      showEndpoint: false,
+      displayName: "Kimi K3.1 Pro",
+    },
+    {
+      value: "openai/kimi-k3.1-pro-highspeed",
+      label: "Kimi K3.1 Pro Highspeed",
+      endpoint: "https://api.moonshot.ai/v1",
+      showEndpoint: false,
+      displayName: "Kimi K3.1 Pro Highspeed",
+    },
+    {
+      value: "openai/kimi-k3",
+      label: "Kimi K3",
+      endpoint: "https://api.moonshot.ai/v1",
+      showEndpoint: false,
+      displayName: "Kimi K3",
+    },
+    {
+      value: CUSTOM_MODEL_VALUE,
+      label: "Custom model",
+      endpoint: "https://api.moonshot.ai/v1",
+      showEndpoint: false,
+      displayName: "Custom Kimi",
       custom: true,
     },
   ],
@@ -598,7 +590,7 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       label: "Custom model",
       endpoint: "",
       showEndpoint: true,
-      displayName: "Custom API",
+      displayName: "OpenAI-compatible API",
       custom: true,
     },
   ],
@@ -617,8 +609,16 @@ function providerLabel(provider: string): string {
   return PROVIDERS.find((item) => item.id === provider)?.label ?? provider;
 }
 
+/** Model preselected when a provider is picked. Falls back to the first listed model. */
+const DEFAULT_MODEL: Partial<Record<ProviderId, string>> = {
+  openai: "openai/gpt-6.2-sol",
+  anthropic: "claude-opus-5-5",
+  gemini: "gemini/gemini-3.1-pro-preview",
+};
+
 function formForProvider(provider: ProviderId): FormState {
-  const option = MODEL_OPTIONS[provider][0];
+  const options = MODEL_OPTIONS[provider];
+  const option = options.find((item) => item.value === DEFAULT_MODEL[provider]) ?? options[0];
   return {
     provider,
     profileLabel: "",
@@ -811,7 +811,7 @@ export function LlmConfigModal(props: {
       setDeletePending(false);
       return;
     }
-    const provider = (["openai", "gemini", "zai", "anthropic", "minimax", "xai", "ollama", "other"].includes(selectedProfile.provider)
+    const provider = (["openai", "gemini", "zai", "anthropic", "minimax", "xai", "kimi", "ollama", "other"].includes(selectedProfile.provider)
       ? selectedProfile.provider
       : "other") as ProviderId;
     const fallback = optionFor(provider, selectedProfile.model);

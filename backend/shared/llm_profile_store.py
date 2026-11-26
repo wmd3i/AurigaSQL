@@ -29,7 +29,7 @@ class LlmProvider(str):
     pass
 
 
-ProviderName = Literal["openai", "gemini", "zai", "anthropic", "minimax", "xai", "ollama", "other"]
+ProviderName = Literal["openai", "gemini", "zai", "anthropic", "minimax", "xai", "kimi", "ollama", "other"]
 ProfileSource = Literal["user", "env"]
 
 

@@ -98,7 +98,7 @@ class DemoConnectionRequest(BaseModel):
     source_group: DemoGroupId
 
 
-ProviderInput = Literal["openai", "gemini", "zai", "anthropic", "minimax", "xai", "ollama", "other"]
+ProviderInput = Literal["openai", "gemini", "zai", "anthropic", "minimax", "xai", "kimi", "ollama", "other"]
 
 
 class LlmConfigCreateRequest(BaseModel):

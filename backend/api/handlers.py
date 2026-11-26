@@ -856,13 +856,15 @@ def _validate_profile_payload(
         raise HTTPException(400, "Anthropic models must start with claude- or anthropic/")
     if provider == "minimax" and not model.startswith("minimax/"):
         raise HTTPException(400, "MiniMax models must start with minimax/")
+    if provider == "kimi" and not model.startswith("openai/"):
+        raise HTTPException(400, "Kimi models should use an OpenAI-compatible model string")
     if provider == "xai" and not model.startswith("xai/"):
         raise HTTPException(400, "xAI models must start with xai/")
     if provider == "ollama" and not model.startswith("ollama_chat/"):
         raise HTTPException(400, "Ollama models must start with ollama_chat/")
     if provider != "ollama" and provider != "other" and not api_key:
         raise HTTPException(400, "api_key is required")
-    if provider in {"zai", "minimax", "xai", "ollama"} and not api_base:
+    if provider in {"zai", "minimax", "xai", "kimi", "ollama"} and not api_base:
         raise HTTPException(400, "api_base is required")
     if provider == "other" and not api_key and not api_base:
         raise HTTPException(400, "api_key or api_base is required")

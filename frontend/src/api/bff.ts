@@ -30,7 +30,7 @@ export type ModelInfo = {
 export type LlmProfile = {
   id: string;
   label: string;
-  provider: "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "ollama" | string;
+  provider: "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "kimi" | "ollama" | string;
   model: string;
   api_base: string;
   enabled: boolean;
@@ -590,7 +590,7 @@ export const bff = {
   setupLocalModel: () => jsonFetch("/local-model/setup", { method: "POST", timeoutMs: LOCAL_MODEL_SETUP_TIMEOUT_MS }, parseLocalModelSetupResponse),
   createLlmConfig: (payload: {
     label: string;
-    provider: "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "ollama" | "other";
+    provider: "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "kimi" | "ollama" | "other";
     model: string;
     api_key: string;
     api_base: string;
@@ -616,7 +616,7 @@ export const bff = {
     jsonFetch(`/llm/configs/${encodeURIComponent(id)}/test`, { method: "POST", timeoutMs: ROUTE_REQUEST_TIMEOUT_MS }, parseConnectionTestResponse),
   testLlmDraft: (payload: {
     profile_id?: string;
-    provider: "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "ollama" | "other";
+    provider: "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "kimi" | "ollama" | "other";
     model?: string;
     api_key?: string;
     api_base?: string;
