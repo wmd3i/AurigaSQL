@@ -18,6 +18,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { ArrowLeft, ChevronsDown, ChevronsUp, Clock3, Database, Home, Maximize2, Minimize2, Pause, Plus, RotateCcw, Scan, Settings2, Sparkles, Unplug } from "lucide-react";
 import { CanvasRail } from "./CanvasRail";
+import { CanvasZoomControl } from "./CanvasZoomControl";
 import { CanvasInspector } from "./CanvasInspector";
 import { CanvasSchemaPanel } from "./CanvasSchemaPanel";
 import { FlowModeSwitch } from "../FlowModeSwitch";
@@ -86,8 +87,6 @@ const nodeTypes = {
   card: ThreadNodeCard,
   floatingDraft: FloatingDraftNode,
 };
-
-const ZOOM_PRESETS = [60, 75, 80, 90, 100, 110, 125, 150];
 
 function canvasWorkKey(conversationsById: Map<string, Conversation>, conv: Conversation) {
   if (conv.canvasWorkId) return conv.canvasWorkId;
@@ -499,10 +498,6 @@ function CanvasInner(props: {
   }, [selectedNode]);
 
   const zoomPercent = Math.round(zoom * 100);
-  const zoomOptions = useMemo(
-    () => (ZOOM_PRESETS.includes(zoomPercent) ? ZOOM_PRESETS : [...ZOOM_PRESETS, zoomPercent].sort((a, b) => a - b)),
-    [zoomPercent],
-  );
 
   useEffect(() => {
     if (!pendingFloatingSpawn) return;
@@ -1525,7 +1520,7 @@ function CanvasInner(props: {
               onNodeClick={onNodeClick}
               onNodeDoubleClick={onNodeDoubleClick}
               minZoom={0.2}
-              maxZoom={1.5}
+              maxZoom={2}
               panOnScroll
               panOnScrollMode={PanOnScrollMode.Free}
               zoomOnScroll={false}
@@ -1633,21 +1628,11 @@ function CanvasInner(props: {
                 >
                   <Scan className={props.embedded ? "h-3.5 w-3.5" : "h-4 w-4"} />
                 </button>
-                <select
-                  aria-label="Canvas zoom"
-                  value={zoomPercent}
-                  onChange={(e) => void rf.zoomTo(Number(e.target.value) / 100, { duration: 180 })}
-                  className={cn(
-                    "rounded-lg border border-transparent bg-transparent px-1 font-semibold text-ink focus:border-line focus:outline-none",
-                    props.embedded ? "py-0.5 text-[12px]" : "py-1 text-[13px]",
-                  )}
-                >
-                  {zoomOptions.map((pct) => (
-                    <option key={pct} value={pct}>
-                      {pct}%
-                    </option>
-                  ))}
-                </select>
+                <CanvasZoomControl
+                  percent={zoomPercent}
+                  embedded={props.embedded}
+                  onChange={(percent) => void rf.zoomTo(percent / 100, { duration: 180 })}
+                />
               </div>
               <div className={cn("w-px bg-line", props.embedded ? "h-6" : "h-7")} />
               <button
