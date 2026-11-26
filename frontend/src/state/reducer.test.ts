@@ -244,13 +244,13 @@ describe("reducer", () => {
     expect(s.activeId).toBe("t1");
   });
 
-  it("OPEN_CONVERSATION reopens a canvas thread on the canvas", () => {
+  it("OPEN_CONVERSATION opens canvas history in the current Chat view", () => {
     const ws = reducer(initialState, {
       type: "CONVERSATION_STARTED", id: "tw", database: "db1", databases: ["db1"], title: "q", createdAt: 1, mode: "workspace",
     });
     const home = reducer(ws, { type: "NEW_FLOW" });
     const s = reducer(home, { type: "OPEN_CONVERSATION", id: "tw" });
-    expect(s.view).toBe("canvas");
+    expect(s.view).toBe("result");
     expect(s.activeId).toBe("tw");
   });
 
@@ -260,6 +260,55 @@ describe("reducer", () => {
     expect(s.activeId).toBeNull();
     expect(s.canvasDb).toBe("db2");
     expect(s.entryMode).toBe("workspace");
+  });
+
+  it("switching Chat to Canvas and back keeps the same session and events", () => {
+    const answered = reducer(started, {
+      type: "SSE_EVENT", id: "t1", event: { type: "final_answer", text: "SELECT 1", sql: "SELECT 1", result: "1" },
+    });
+    const canvas = reducer(answered, { type: "SET_VIEW", view: "canvas" });
+    expect(canvas).toMatchObject({ view: "canvas", activeId: "t1", currentCanvasWorkId: "t1", canvasDb: "db1" });
+    const chat = reducer(canvas, { type: "SET_VIEW", view: "result" });
+    expect(chat).toMatchObject({ view: "result", activeId: "t1" });
+    expect(chat.conversations).toBe(answered.conversations);
+  });
+
+  it("Canvas history can open a Chat session without changing its origin or duplicating it", () => {
+    const canvas = reducer(started, { type: "START_OVER_WORKSPACE", view: "canvas", canvasWorkId: "empty" });
+    const opened = reducer(canvas, { type: "OPEN_CONVERSATION", id: "t1" });
+    expect(opened).toMatchObject({ view: "canvas", activeId: "t1", currentCanvasWorkId: "t1", canvasDb: "db1" });
+    expect(opened.conversations).toBe(started.conversations);
+    expect(opened.conversations[0].mode).toBe("agent");
+  });
+
+  it("Chat can select a Canvas branch and return to the same work without losing its siblings", () => {
+    const root = reducer(started, {
+      type: "CONVERSATION_STARTED", id: "root", database: "db2", databases: ["db2"], title: "root", createdAt: 2,
+      mode: "workspace", canvasWorkId: "work",
+    });
+    const branch = reducer(root, {
+      type: "CONVERSATION_STARTED", id: "fork", database: "db2", databases: ["db2"], title: "fork", createdAt: 3,
+      mode: "workspace", canvasWorkId: "work", parentThreadId: "root", parentNodeId: "n0", canvasBranchKind: "fork",
+    });
+    const chat = reducer(branch, { type: "OPEN_CONVERSATION", id: "fork", view: "result" });
+    expect(chat).toMatchObject({ view: "result", activeId: "fork", currentCanvasWorkId: "work" });
+    const selectedRoot = reducer(chat, { type: "OPEN_CONVERSATION", id: "root" });
+    const canvas = reducer(selectedRoot, { type: "SET_VIEW", view: "canvas" });
+    expect(canvas).toMatchObject({ view: "canvas", activeId: "root", currentCanvasWorkId: "work" });
+    expect(canvas.conversations).toBe(branch.conversations);
+  });
+
+  it("deleting the active history entry preserves the display mode of the next entry", () => {
+    const workspace = reducer(started, {
+      type: "CONVERSATION_STARTED", id: "workspace", database: "db2", databases: ["db2"], title: "q2", createdAt: 2,
+      mode: "workspace", canvasWorkId: "work",
+    });
+    const canvas = reducer(workspace, { type: "DELETE_CONVERSATION", id: "workspace" });
+    expect(canvas).toMatchObject({ view: "canvas", activeId: "t1", currentCanvasWorkId: "t1" });
+    const chat = reducer(workspace, { type: "OPEN_CONVERSATION", id: "t1", view: "result" });
+    const remaining = reducer(chat, { type: "DELETE_CONVERSATION", id: "t1" });
+    expect(remaining).toMatchObject({ view: "result", activeId: "workspace" });
+    expect(remaining.conversations.map((c) => c.id)).toEqual(["workspace"]);
   });
 
   it("OPEN_WORKSPACE can preserve the active workspace thread when expanding embedded canvas", () => {
@@ -273,7 +322,7 @@ describe("reducer", () => {
     expect(s.canvasDb).toBe("db1");
   });
 
-  it("OPEN_WORKSPACE restores the current canvas work after returning home or opening chat", () => {
+  it("OPEN_WORKSPACE shows the active Chat thread, or restores the last canvas when home is empty", () => {
     const workspace = reducer(initialState, {
       type: "CONVERSATION_STARTED", id: "tw", database: "db1", databases: ["db1"], title: "q", createdAt: 1,
       mode: "workspace", canvasWorkId: "work-1",
@@ -286,8 +335,8 @@ describe("reducer", () => {
     for (const previous of [home, chat]) {
       const reopened = reducer(previous, { type: "OPEN_WORKSPACE", database: "Canvas", preserveActiveThread: true });
       expect(reopened.view).toBe("canvas");
-      expect(reopened.activeId).toBe("tw");
-      expect(reopened.currentCanvasWorkId).toBe("work-1");
+      expect(reopened.activeId).toBe(previous === chat ? "chat" : "tw");
+      expect(reopened.currentCanvasWorkId).toBe(previous === chat ? "chat" : "work-1");
       expect(reopened.conversations).toEqual(previous.conversations);
     }
   });

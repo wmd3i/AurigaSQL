@@ -18,7 +18,7 @@ export type Conversation = {
   source?: DataSource;
   database: string;
   databases: string[];
-  mode: QueryMode;
+  mode: QueryMode; // creation mode; the active view controls how history is displayed
   canvasWorkId: string | null; // groups all runs/cards that belong to one canvas work/session
   parentThreadId: string | null; // branch threads: which conversation they forked from
   parentNodeId: string | null; // branch threads: which card inside the parent thread they forked from
@@ -112,7 +112,7 @@ export type Action =
   | { type: "REVERT_CONVERSATION_TO_NODE"; id: string; nodeId: string }
   | { type: "NEW_FLOW" }
   | { type: "START_OVER_WORKSPACE"; view?: "home" | "canvas"; canvasWorkId?: string | null }
-  | { type: "OPEN_CONVERSATION"; id: string }
+  | { type: "OPEN_CONVERSATION"; id: string; view?: "result" | "canvas" }
   | { type: "OPEN_WORKSPACE_SETUP" }
   | { type: "OPEN_WORKSPACE"; database: string; preserveActiveThread?: boolean }
   | { type: "SET_VIEW"; view: View; canvasScope?: CanvasScope }

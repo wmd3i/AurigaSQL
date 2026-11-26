@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Trash2 } from "lucide-react";
+import { buildHistoryItems } from "../../lib/conversationHistory";
 import { cn } from "../../lib/cn";
 import { inferDataEngine } from "../../lib/databaseEngine";
 import type { Conversation, ConversationStatus } from "../../state/types";
@@ -41,17 +42,6 @@ function threadStatusTone(status: ConversationStatus) {
   }
 }
 
-function canvasWorkKey(conversationsById: Map<string, Conversation>, conv: Conversation) {
-  if (conv.canvasWorkId) return conv.canvasWorkId;
-  let current: Conversation | undefined = conv;
-  const seen = new Set<string>();
-  while (current?.parentThreadId && !seen.has(current.id)) {
-    seen.add(current.id);
-    current = conversationsById.get(current.parentThreadId);
-  }
-  return current?.id ?? conv.id;
-}
-
 function aggregateStatus(conversations: Conversation[]): Pick<CanvasWork, "status" | "turnInFlight"> {
   const turnInFlight = conversations.some((c) => c.turnInFlight || c.status === "starting" || c.status === "active");
   if (turnInFlight) return { status: "active", turnInFlight: true };
@@ -80,25 +70,13 @@ export function CanvasRail(props: {
   onDeleteThread?: (id: string) => void;
 }) {
   const works = useMemo<CanvasWork[]>(() => {
-    const conversationsById = new Map(props.conversations.map((conversation) => [conversation.id, conversation]));
-    const grouped = new Map<string, Conversation[]>();
-    props.conversations.forEach((conversation) => {
-      const key = canvasWorkKey(conversationsById, conversation);
-      grouped.set(key, [...(grouped.get(key) ?? []), conversation]);
-    });
-    return [...grouped.entries()].map(([id, conversations]) => {
-      const sortedNewest = [...conversations].sort((a, b) => b.createdAt - a.createdAt);
-      const sortedOldest = [...conversations].sort((a, b) => a.createdAt - b.createdAt);
-      const primary = sortedOldest.find((conversation) => !conversation.parentThreadId) ?? sortedOldest[0];
-      const latest = sortedNewest[0];
-      return {
-        id,
-        conversations: sortedNewest,
-        primary,
-        latest,
-        ...aggregateStatus(conversations),
-      };
-    });
+    return buildHistoryItems(props.conversations).map((item) => ({
+      id: item.key,
+      primary: item.primary,
+      latest: item.latest,
+      conversations: item.conversations,
+      ...aggregateStatus(item.conversations),
+    }));
   }, [props.conversations]);
   const stats = summarizeThreads(works);
   const activeWork = works.find((work) => work.conversations.some((c) => c.id === props.activeId)) ?? null;
@@ -115,7 +93,7 @@ export function CanvasRail(props: {
       <div className="px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-faint">Canvas Threads</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-faint">History</p>
             {activeWork && (
               <p className="mt-1 text-[11px] text-faint">Focused: {threadStatusLabel(activeWork.status, activeWork.turnInFlight)}</p>
             )}
