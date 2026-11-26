@@ -583,7 +583,7 @@ export function AgentResultPage(props: {
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 border-b border-line/80 bg-transparent px-6 py-2.5">
-          <div className="mx-auto flex w-full max-w-[1480px] items-center justify-end gap-10 xl:gap-14">
+          <div className="flex w-full items-center justify-end gap-10 xl:gap-14">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
               <FlowModeSwitch mode="agent" onModeChange={(mode) => {
                 if (mode === "workspace") props.onShowProcess();
