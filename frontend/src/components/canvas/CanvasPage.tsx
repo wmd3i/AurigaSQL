@@ -59,7 +59,6 @@ const TOOL_GROUP_ITEM_GAP = 8;
 const DEFAULT_THREAD_FOCUS = { padding: 0.38, maxZoom: 0.9, upperBias: 0 };
 const THREAD_FOCUS = { padding: 0.3, maxZoom: 1, upperBias: 0 };
 const NODE_FOCUS = { padding: 0.48, maxZoom: 1, upperBias: 0.18 };
-const DEFAULT_FIT_VIEW = { padding: DEFAULT_THREAD_FOCUS.padding, maxZoom: DEFAULT_THREAD_FOCUS.maxZoom };
 
 type CanvasNode = CardNode | FloatingDraftNodeT;
 type LeftPanel = "threads" | "schema" | "data" | null;
@@ -396,7 +395,6 @@ function CanvasInner(props: {
   const [nodes, setNodes] = useNodesState<CanvasNode>([]);
   const nodesRef = useRef<CanvasNode[]>([]);
   const [nodeHeights, setNodeHeights] = useState<Record<string, number>>({});
-  const baseCardPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const manualCardPositionIdsRef = useRef<Set<string>>(new Set());
   const rf = useReactFlow();
   const nodesInitialized = useNodesInitialized();
@@ -938,10 +936,6 @@ function CanvasInner(props: {
     [focusedThreadNodeIds, nodeHeights],
   );
   const focusedThreadPosition = focusedCanvasThreadId ? floatingThreadPositions[focusedCanvasThreadId] : undefined;
-  const allCardNodeIds = useMemo(
-    () => nodes.filter((n) => n.type === "card").map((n) => n.id),
-    [nodes],
-  );
 
   const onCardHeightChange = useCallback((id: string, height: number) => {
     if (!Number.isFinite(height) || height <= 0) return;
@@ -1152,10 +1146,6 @@ function CanvasInner(props: {
         });
       });
 
-      baseCardPositionsRef.current = new Map(
-        [...autoCardPositions.entries()].map(([id, position]) => [id, { ...position }]),
-      );
-
       return out;
     });
   }, [
@@ -1261,35 +1251,10 @@ function CanvasInner(props: {
     focusCanvasNodes(ids, { ...THREAD_FOCUS, duration: 400 });
   }
 
-  function resetThreadLayout() {
-    const basePositions = baseCardPositionsRef.current;
-    if (basePositions.size === 0) return;
-
-    manualCardPositionIdsRef.current.clear();
-    setNodes((current) =>
-      current.map((node) => {
-        if (!isCardNode(node)) return node;
-        const base = basePositions.get(node.id);
-        if (!base) return node;
-        return {
-          ...node,
-          position: { ...base },
-        };
-      }),
-    );
-
-    requestAnimationFrame(() => {
-      const fitOpts = props.embedded
-        ? { padding: 0.22, minZoom: 0.6, maxZoom: 0.9, upperBias: 0, duration: 320 }
-        : { ...THREAD_FOCUS, duration: 320 };
-      if (focusedThreadNodeIds.length > 0) {
-        focusCanvasNodes(focusedThreadNodeIds, fitOpts);
-      } else if (allCardNodeIds.length > 0) {
-        void rf.fitView({ nodes: allCardNodeIds.map((id) => ({ id })), duration: 320, ...DEFAULT_FIT_VIEW });
-      } else {
-        void rf.fitView({ duration: 320, ...DEFAULT_FIT_VIEW });
-      }
-    });
+  function fitCanvasView() {
+    // Include every visible thread and composer without changing their layout.
+    const ids = rf.getNodes().filter((node) => !node.hidden).map((node) => node.id);
+    focusCanvasNodes(ids, { padding: 0.2, maxZoom: 1, upperBias: 0, duration: 320 });
   }
 
   function focusNode(canvasId: string) {
@@ -1630,7 +1595,7 @@ function CanvasInner(props: {
                 <button
                   aria-label="Fit view"
                   title="Fit view"
-                  onClick={resetThreadLayout}
+                  onClick={fitCanvasView}
                   className="rounded-lg p-1 text-muted transition-colors hover:bg-hover hover:text-ink"
                 >
                   <Scan className={props.embedded ? "h-3.5 w-3.5" : "h-4 w-4"} />
