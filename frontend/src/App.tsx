@@ -283,6 +283,7 @@ export default function App() {
   };
 
   const startOverWorkspace = (view: "home" | "canvas" = "home") => {
+    setCanvasSourceMismatch(null);
     setWorkspaceResetToken((token) => token + 1);
     dispatch({ type: "START_OVER_WORKSPACE", view, canvasWorkId: createCanvasWorkId() });
   };

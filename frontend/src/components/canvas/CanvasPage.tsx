@@ -418,7 +418,7 @@ function CanvasInner(props: {
   const [canvasHint, setCanvasHint] = useState<string | null>(null);
   const seededEmptyDraftRef = useRef(false);
   const lastActiveFocusRef = useRef<string | null>(null);
-  const lastWorkspaceResetTokenRef = useRef(props.workspaceResetToken);
+  const centeredInitialDraftRef = useRef<string | null>(null);
   const canvasHostRef = useRef<HTMLElement | null>(null);
 
   const threadNodes = useCallback((conv: Conversation): CardContent[] => {
@@ -438,19 +438,6 @@ function CanvasInner(props: {
   useEffect(() => {
     setFocusThreadId(props.activeId);
   }, [props.activeId]);
-
-  useEffect(() => {
-    if (lastWorkspaceResetTokenRef.current === props.workspaceResetToken) return;
-    lastWorkspaceResetTokenRef.current = props.workspaceResetToken;
-    setFocusThreadId(null);
-    setPendingFloatingSpawn(null);
-    setBranchDrafts([]);
-    setSelectedBranchDraftId(null);
-    setInspectedTool(null);
-    setDetailOpen(false);
-    setNodes((current) => current.map((node) => ({ ...node, selected: false })));
-    seededEmptyDraftRef.current = false;
-  }, [props.workspaceResetToken, setNodes]);
 
   const allConversationById = useMemo(
     () => new Map(props.conversations.map((conv) => [conv.id, conv])),
@@ -926,6 +913,17 @@ function CanvasInner(props: {
   );
 
   const focusedCanvasThreadId = focusThreadId ?? props.activeId ?? null;
+  // Center the initial composer after React Flow has measured its actual size.
+  useEffect(() => {
+    const initialDraft = floatingDrafts.find((draft) => draft.id.startsWith("draft-thread:initial:"));
+    if (focusedCanvasThreadId || !nodesInitialized || !initialDraft || centeredInitialDraftRef.current === initialDraft.id) return;
+    const frame = requestAnimationFrame(() => {
+      centeredInitialDraftRef.current = initialDraft.id;
+      focusCanvasNodes([initialDraft.id], { maxZoom: 1, upperBias: 0, duration: 0 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [floatingDrafts, focusedCanvasThreadId, focusCanvasNodes, nodesInitialized]);
+
   const focusedThreadNodeIds = useMemo(
     () =>
       focusedCanvasThreadId
@@ -1700,7 +1698,8 @@ function CanvasInner(props: {
 
 export function CanvasPage(props: Parameters<typeof CanvasInner>[0]) {
   return (
-    <ReactFlowProvider>
+    // Reset local drafts, layout, selection, and viewport; history lives in App.
+    <ReactFlowProvider key={props.workspaceResetToken}>
       <CanvasInner {...props} />
     </ReactFlowProvider>
   );
