@@ -3,9 +3,8 @@ import { HomePage } from "./components/home/HomePage";
 import { WorkspaceSetupPage } from "./components/workspace/WorkspaceSetupPage";
 import { CanvasPage } from "./components/canvas/CanvasPage";
 import { AgentResultPage } from "./components/result/AgentResultPage";
-import { LlmConfigModal } from "./components/settings/LlmConfigModal";
 import { SettingsModal } from "./components/settings/SettingsModal";
-import { SettingsContext, type SettingsTab } from "./state/settingsContext";
+import { SettingsContext, type OpenSettings, type SettingsTab } from "./state/settingsContext";
 import { DataConnectionModal } from "./components/home/DataConnectionModal";
 import { reducer } from "./state/reducer";
 import { initialState, type QueryMode } from "./state/types";
@@ -156,8 +155,13 @@ export default function App() {
   // App-wide model selection (shared by the home picker + canvas/result bylines).
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelId, setModelId] = useState<string>("");
-  const [llmConfigOpen, setLlmConfigOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+  const [settingsAddModel, setSettingsAddModel] = useState(false);
+  // Every model entry point (picker, gear, "Select a model" toast) opens Settings → Models.
+  const openSettings: OpenSettings = (tab, options) => {
+    setSettingsAddModel(Boolean(options?.addModel));
+    setSettingsTab(tab ?? "general");
+  };
   const [dataConnectionOpen, setDataConnectionOpen] = useState(false);
   const [dataConnectionVersion, setDataConnectionVersion] = useState(0);
 
@@ -370,7 +374,7 @@ export default function App() {
           Promise.resolve(chat.sendMessage(activeConversation.id, query, modelId))
         }
         onStop={chat.cancel}
-        onOpenLlmConfig={() => setLlmConfigOpen(true)}
+        onOpenLlmConfig={() => openSettings("models")}
         dataSources={connectedSidebarSources}
       />
     );
@@ -382,7 +386,7 @@ export default function App() {
         onBack={() => dispatch({ type: "SET_VIEW", view: "home" })}
         onOpen={(id) => dispatch({ type: "OPEN_CONVERSATION", id })}
         onDeleteConversation={onDeleteConversation}
-        onOpenLlmConfig={() => setLlmConfigOpen(true)}
+        onOpenLlmConfig={() => openSettings("models")}
       />
     );
   } else if (state.view === "canvas" && state.canvasDb) {
@@ -436,7 +440,7 @@ export default function App() {
         workspaceResetToken={workspaceResetToken}
         transitionPhase={canvasTransitionPhase}
         onConnectData={openWorkspaceSetup}
-        onOpenLlmConfig={() => setLlmConfigOpen(true)}
+        onOpenLlmConfig={() => openSettings("models")}
         hasDataSource={Boolean(activeConversation?.source ?? workspaceSource) || connectedSidebarSources.some((source) => source.ready)}
         dataSources={connectedSidebarSources}
         selectedDataSourceId={workspaceSource?.id ?? null}
@@ -474,7 +478,7 @@ export default function App() {
         selectedDataSource={workspaceSource}
         onOpenWorkspaceSetup={openWorkspaceSetup}
         onOpenCanvas={openWorkspace}
-        onOpenLlmConfig={() => setLlmConfigOpen(true)}
+        onOpenLlmConfig={() => openSettings("models")}
         dataConnectionVersion={dataConnectionVersion}
       />
     );
@@ -482,13 +486,8 @@ export default function App() {
 
   return (
     <ModelContext.Provider value={{ models, selectedId: modelId, setSelectedId: setModelId }}>
-      <SettingsContext.Provider value={(tab) => setSettingsTab(tab ?? "general")}>
+      <SettingsContext.Provider value={openSettings}>
       {content}
-      <LlmConfigModal
-        open={llmConfigOpen}
-        onClose={() => setLlmConfigOpen(false)}
-        onModelsChanged={refreshModels}
-      />
       <DataConnectionModal
         open={dataConnectionOpen}
         onClose={() => setDataConnectionOpen(false)}
@@ -497,6 +496,7 @@ export default function App() {
       <SettingsModal
         open={settingsTab !== null}
         initialTab={settingsTab ?? undefined}
+        addModel={settingsAddModel}
         onClose={() => setSettingsTab(null)}
         onModelsChanged={refreshModels}
       />

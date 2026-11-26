@@ -4,8 +4,15 @@ export type SettingsTab = "general" | "models" | "data" | "about";
 
 /** Opens the app Settings panel. Provided at the App root so any sidebar can
  *  open it without threading a prop through every page. Null when no provider. */
-export const SettingsContext = createContext<((tab?: SettingsTab) => void) | null>(null);
+export type OpenSettingsOptions = {
+  /** Models tab only: open straight on the "Add a model" form instead of the saved-models list. */
+  addModel?: boolean;
+};
 
-export function useOpenSettings(): ((tab?: SettingsTab) => void) | null {
+export type OpenSettings = (tab?: SettingsTab, options?: OpenSettingsOptions) => void;
+
+export const SettingsContext = createContext<OpenSettings | null>(null);
+
+export function useOpenSettings(): OpenSettings | null {
   return useContext(SettingsContext);
 }

@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Database, Download, ExternalLink, Info, Monitor, Moon, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Database, Download, ExternalLink, Info, Monitor, Moon, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../../lib/cn";
 import type { SettingsTab } from "../../state/settingsContext";
-import { LlmConfigModal } from "./LlmConfigModal";
+import { LlmConfigModal, type EmbeddedHeader } from "./LlmConfigModal";
 
 // Keep in sync with frontend/package.json "version".
 const APP_VERSION = "0.1.0";
@@ -195,14 +195,22 @@ function AboutTab() {
 export function SettingsModal(props: {
   open: boolean;
   initialTab?: SettingsTab;
+  /** Open the Models tab on the "Add a model" form. */
+  addModel?: boolean;
   onClose: () => void;
   onModelsChanged: (preferredModelId?: string) => Promise<void> | void;
 }) {
   const [tab, setTab] = useState<SettingsTab>(props.initialTab ?? "general");
+  // Applies only to the first Models view after opening; switching tabs and back shows the list.
+  const [addModel, setAddModel] = useState(Boolean(props.addModel));
+  // Sub-page header from the Models tab (e.g. "Add a model" with a back arrow).
+  const [subHeader, setSubHeader] = useState<EmbeddedHeader | null>(null);
 
   useEffect(() => {
-    if (props.open) setTab(props.initialTab ?? "general");
-  }, [props.open, props.initialTab]);
+    if (!props.open) return;
+    setTab(props.initialTab ?? "general");
+    setAddModel(Boolean(props.addModel));
+  }, [props.open, props.initialTab, props.addModel]);
 
   useEffect(() => {
     if (!props.open) return;
@@ -239,7 +247,10 @@ export function SettingsModal(props: {
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setTab(item.id)}
+                onClick={() => {
+                  setTab(item.id);
+                  setAddModel(false);
+                }}
                 className={cn(
                   "flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium transition",
                   active ? "bg-card text-ink shadow-sm ring-1 ring-line/70" : "text-muted hover:bg-hover hover:text-ink",
@@ -252,22 +263,47 @@ export function SettingsModal(props: {
           })}
         </nav>
 
-        <div className="relative flex min-w-0 flex-1 flex-col">
-          <button
-            type="button"
-            onClick={props.onClose}
-            title="Close"
-            aria-label="Close"
-            className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-hover hover:text-ink"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Header row keeps the close button out of the content area, so no tab's content can sit under it. */}
+          <header className="flex shrink-0 items-center gap-3 pl-6 pr-4 pt-4">
+            {tab === "models" && subHeader?.onBack && (
+              <button
+                type="button"
+                onClick={subHeader.onBack}
+                disabled={subHeader.backDisabled}
+                title="Back to models"
+                aria-label="Back to models"
+                className="-ml-2 -mr-1 flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-hover hover:text-ink disabled:opacity-45"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            )}
+            <h2 className="flex-1 text-[15px] font-semibold text-ink">
+              {(tab === "models" && subHeader?.title) || TABS.find((item) => item.id === tab)?.label}
+            </h2>
+            <button
+              type="button"
+              onClick={props.onClose}
+              title="Close"
+              aria-label="Close"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-hover hover:text-ink"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </header>
           {tab === "models" ? (
-            <div className="flex min-h-0 flex-1 flex-col pt-1">
-              <LlmConfigModal embedded open onClose={props.onClose} onModelsChanged={props.onModelsChanged} />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <LlmConfigModal
+                embedded
+                open
+                startInAdd={addModel}
+                onHeaderChange={setSubHeader}
+                onClose={props.onClose}
+                onModelsChanged={props.onModelsChanged}
+              />
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6 pr-14">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
               {tab === "general" && <GeneralTab />}
               {tab === "data" && <DataTab />}
               {tab === "about" && <AboutTab />}
