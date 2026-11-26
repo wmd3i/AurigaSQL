@@ -4,6 +4,8 @@ import { WorkspaceSetupPage } from "./components/workspace/WorkspaceSetupPage";
 import { CanvasPage } from "./components/canvas/CanvasPage";
 import { AgentResultPage } from "./components/result/AgentResultPage";
 import { LlmConfigModal } from "./components/settings/LlmConfigModal";
+import { SettingsModal } from "./components/settings/SettingsModal";
+import { SettingsContext, type SettingsTab } from "./state/settingsContext";
 import { DataConnectionModal } from "./components/home/DataConnectionModal";
 import { reducer } from "./state/reducer";
 import { initialState, type QueryMode } from "./state/types";
@@ -155,6 +157,7 @@ export default function App() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelId, setModelId] = useState<string>("");
   const [llmConfigOpen, setLlmConfigOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
   const [dataConnectionOpen, setDataConnectionOpen] = useState(false);
   const [dataConnectionVersion, setDataConnectionVersion] = useState(0);
 
@@ -479,6 +482,7 @@ export default function App() {
 
   return (
     <ModelContext.Provider value={{ models, selectedId: modelId, setSelectedId: setModelId }}>
+      <SettingsContext.Provider value={(tab) => setSettingsTab(tab ?? "general")}>
       {content}
       <LlmConfigModal
         open={llmConfigOpen}
@@ -490,6 +494,13 @@ export default function App() {
         onClose={() => setDataConnectionOpen(false)}
         onChanged={handleDataConnectionChanged}
       />
+      <SettingsModal
+        open={settingsTab !== null}
+        initialTab={settingsTab ?? undefined}
+        onClose={() => setSettingsTab(null)}
+        onModelsChanged={refreshModels}
+      />
+      </SettingsContext.Provider>
     </ModelContext.Provider>
   );
 }
