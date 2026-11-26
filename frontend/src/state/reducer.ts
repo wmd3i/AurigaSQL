@@ -1,5 +1,6 @@
 import { buildTimeline, type RawAgentEvent } from "../lib/buildTimeline";
 import { buildNodes } from "../lib/buildNodes";
+import { conversationWorkId } from "../lib/conversationHistory";
 import type { Action, AppState, Conversation } from "./types";
 
 function patch(
@@ -47,18 +48,6 @@ function statusFromEvents(events: RawAgentEvent[], fallback: Conversation["statu
   return events.length > 0 ? "active" : fallback;
 }
 
-function canvasWorkIdForConversation(conversations: Conversation[], conversation: Conversation) {
-  if (conversation.canvasWorkId) return conversation.canvasWorkId;
-  const byId = new Map(conversations.map((item) => [item.id, item]));
-  let current: Conversation | undefined = conversation;
-  const seen = new Set<string>();
-  while (current?.parentThreadId && !seen.has(current.id)) {
-    seen.add(current.id);
-    current = byId.get(current.parentThreadId);
-  }
-  return current?.canvasWorkId ?? current?.id ?? conversation.id;
-}
-
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "CONVERSATION_STARTED": {
@@ -91,7 +80,8 @@ export function reducer(state: AppState, action: Action): AppState {
         view: action.preserveView ? state.view : action.mode === "agent" ? "result" : "canvas",
         activeId: conv.id,
         canvasDb: state.canvasDb ?? conv.database,
-        currentCanvasWorkId: conv.mode === "workspace" ? conv.canvasWorkId : state.currentCanvasWorkId,
+        currentCanvasWorkId: conv.canvasWorkId ?? conv.id,
+        entryMode: action.mode,
         canvasScope: action.canvasScope ?? (action.mode === "agent" ? state.canvasScope : "all"),
         conversations: [conv, ...state.conversations],
       };
@@ -229,23 +219,18 @@ export function reducer(state: AppState, action: Action): AppState {
         view:
           conversations.length === 0
             ? "home"
-            : wasActive
-              ? nextActiveConversation?.mode === "agent"
-                ? "result"
-                : "canvas"
-              : state.view,
+            : state.view,
         canvasDb:
           state.canvasDb === deletedConversation?.database
             ? conversations[0]?.database ?? null
             : state.canvasDb,
-        currentCanvasWorkId:
-          deletedConversation?.canvasWorkId && state.currentCanvasWorkId === deletedConversation.canvasWorkId
-            ? nextActiveConversation?.canvasWorkId ?? null
-            : state.currentCanvasWorkId,
+        currentCanvasWorkId: wasActive && nextActiveConversation
+          ? conversationWorkId(conversations, nextActiveConversation)
+          : state.currentCanvasWorkId,
         canvasScope:
           conversations.length === 0
             ? "all"
-            : wasActive && nextActiveConversation?.mode === "workspace"
+            : wasActive && state.view === "canvas"
               ? "all"
               : state.canvasScope,
       };
@@ -290,38 +275,51 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     case "OPEN_CONVERSATION": {
       const conv = state.conversations.find((c) => c.id === action.id);
-      const view: AppState["view"] = conv?.mode === "agent" ? "result" : "canvas";
+      if (!conv) return state;
+      const view = action.view ?? (state.view === "canvas" ? "canvas" : "result");
       return {
         ...state,
         view,
         activeId: action.id,
-        currentCanvasWorkId: conv?.mode === "workspace" ? conv.canvasWorkId ?? conv.id : state.currentCanvasWorkId,
-        canvasScope: conv?.mode === "workspace" ? "all" : state.canvasScope,
+        currentCanvasWorkId: conversationWorkId(state.conversations, conv),
+        canvasDb: conv.database,
+        canvasScope: "all",
+        entryMode: view === "canvas" ? "workspace" : "agent",
+        answerTarget: conv.pendingQuestion ? conv.id : null,
       };
     }
     case "OPEN_WORKSPACE": {
       const activeWorkspace = action.preserveActiveThread
-        ? state.conversations.find((c) => c.id === state.activeId && c.mode === "workspace") ??
-          state.conversations.find((c) => c.mode === "workspace" && state.currentCanvasWorkId &&
-            canvasWorkIdForConversation(state.conversations, c) === state.currentCanvasWorkId)
+        ? state.conversations.find((c) => c.id === state.activeId) ??
+          state.conversations.find((c) => state.currentCanvasWorkId &&
+            conversationWorkId(state.conversations, c) === state.currentCanvasWorkId)
         : null;
       return {
         ...state,
         view: "canvas",
         activeId: activeWorkspace ? activeWorkspace.id : null,
-        canvasDb: activeWorkspace ? state.canvasDb ?? activeWorkspace.database : action.database,
-        currentCanvasWorkId: activeWorkspace?.canvasWorkId ?? state.currentCanvasWorkId,
+        canvasDb: activeWorkspace ? activeWorkspace.database : action.database,
+        currentCanvasWorkId: activeWorkspace
+          ? conversationWorkId(state.conversations, activeWorkspace)
+          : state.currentCanvasWorkId,
         canvasScope: "all",
         answerTarget: null,
         entryMode: "workspace",
       };
     }
-    case "SET_VIEW":
+    case "SET_VIEW": {
+      const active = state.conversations.find((c) => c.id === state.activeId);
       return {
         ...state,
         view: action.view,
         canvasScope: action.view === "canvas" ? action.canvasScope ?? state.canvasScope : state.canvasScope,
+        canvasDb: action.view === "canvas" && active ? active.database : state.canvasDb,
+        currentCanvasWorkId: action.view === "canvas" && active
+          ? conversationWorkId(state.conversations, active)
+          : state.currentCanvasWorkId,
+        entryMode: action.view === "canvas" ? "workspace" : action.view === "result" ? "agent" : state.entryMode,
       };
+    }
     case "SET_ANSWER_TARGET":
       return { ...state, answerTarget: action.id };
     case "SET_ENTRY_MODE":

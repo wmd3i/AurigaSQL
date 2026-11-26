@@ -16,7 +16,7 @@ import {
   type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, ChevronsDown, ChevronsUp, Clock3, Database, Home, Maximize2, Minimize2, Pause, Plus, RotateCcw, Scan, Settings2, Sparkles, Unplug } from "lucide-react";
+import { ChevronsDown, ChevronsUp, Clock3, Database, Home, Maximize2, Minimize2, Pause, Plus, RotateCcw, Scan, Settings2, Sparkles, Unplug } from "lucide-react";
 import { CanvasRail } from "./CanvasRail";
 import { CanvasInspector } from "./CanvasInspector";
 import { CanvasSchemaPanel } from "./CanvasSchemaPanel";
@@ -32,6 +32,7 @@ import { ThreadNodeCard, type CardContent, type CardData, type CardNode } from "
 import { FloatingDraftNode, type FloatingDraftNodeT } from "./FloatingDraftNode";
 import type { BranchTarget } from "./CanvasComposer";
 import type { CanvasToneId } from "../../lib/canvasTones";
+import { conversationWorkId } from "../../lib/conversationHistory";
 import { resolveCanvasRowY } from "../../lib/canvasLayout";
 
 const COLUMN_W = 384;
@@ -90,14 +91,7 @@ const nodeTypes = {
 const ZOOM_PRESETS = [60, 75, 80, 90, 100, 110, 125, 150];
 
 function canvasWorkKey(conversationsById: Map<string, Conversation>, conv: Conversation) {
-  if (conv.canvasWorkId) return conv.canvasWorkId;
-  let current: Conversation | undefined = conv;
-  const seen = new Set<string>();
-  while (current?.parentThreadId && !seen.has(current.id)) {
-    seen.add(current.id);
-    current = conversationsById.get(current.parentThreadId);
-  }
-  return current?.id ?? conv.id;
+  return conversationWorkId([...conversationsById.values()], conv);
 }
 
 function estimateHeight(tn: CardContent): number {
@@ -370,7 +364,8 @@ function CanvasInner(props: {
   onNewFlow: () => void;
   onStartOverWorkspace?: () => void;
   workspaceResetToken?: number;
-  backToResult?: () => void;
+  onShowChat: () => void;
+  onSelectConversation: (id: string) => void;
   embedded?: boolean;
   hideModeSwitch?: boolean;
   transitionPhase?: "enter" | "exit" | null;
@@ -1137,6 +1132,8 @@ function CanvasInner(props: {
               onInspectTool:
                 tn.kind === "tool_group"
                   ? (tool, openDetail = false) => {
+                      props.onSelectConversation(conv.id);
+                      setFocusThreadId(conv.id);
                       setInspectedTool({ parentId: id, tool });
                       setDetailOpen((open) => openDetail || open);
                       setNodes((current) => current.map((item) => ({ ...item, selected: item.id === id })));
@@ -1242,6 +1239,8 @@ function CanvasInner(props: {
 
   const onNodeClick: NodeMouseHandler<CanvasNode> = (_, node) => {
     if (node.type !== "card") return;
+    props.onSelectConversation(node.id.split(":")[0]);
+    setFocusThreadId(node.id.split(":")[0]);
     setInspectedTool(null);
     setDetailOpen((open) => open && opensInspector(node.data.tn));
     setNodes((current) => current.map((item) => ({ ...item, selected: item.id === node.id })));
@@ -1249,12 +1248,15 @@ function CanvasInner(props: {
 
   const onNodeDoubleClick: NodeMouseHandler<CanvasNode> = (_, node) => {
     if (node.type !== "card") return;
+    props.onSelectConversation(node.id.split(":")[0]);
+    setFocusThreadId(node.id.split(":")[0]);
     setInspectedTool(null);
     setDetailOpen(opensInspector(node.data.tn));
     setNodes((current) => current.map((item) => ({ ...item, selected: item.id === node.id })));
   };
 
   function focusThread(id: string) {
+    props.onSelectConversation(id);
     setFocusThreadId(id);
     setLeftPanel(null);
     const ids = nodes.filter((n) => n.id.startsWith(`${id}:`)).map((n) => n.id);
@@ -1293,6 +1295,7 @@ function CanvasInner(props: {
   }
 
   function focusNode(canvasId: string) {
+    props.onSelectConversation(canvasId.split(":")[0]);
     setFocusThreadId(canvasId.split(":")[0]);
     setInspectedTool(null);
     setDetailOpen(true);
@@ -1554,30 +1557,12 @@ function CanvasInner(props: {
                 </div>
               </Panel>
             )}
-            {props.backToResult && !props.hideModeSwitch && (
-              <Panel position="top-left" className="flex items-center gap-2">
-                <FlowModeSwitch
-                  mode="workspace"
-                  onModeChange={(mode) => {
-                    if (mode === "agent") props.onNewFlow();
-                  }}
-                />
-                <button
-                  onClick={props.backToResult}
-                  title="Return to the result view"
-                  className="flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12px] font-medium text-ink shadow-sm hover:bg-hover"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Back to result
-                </button>
-              </Panel>
-            )}
-            {!props.backToResult && !props.hideModeSwitch && (
+            {!props.hideModeSwitch && (
               <Panel position="top-left">
                 <FlowModeSwitch
                   mode="workspace"
                   onModeChange={(mode) => {
-                    if (mode === "agent") props.onNewFlow();
+                    if (mode === "agent") props.onShowChat();
                   }}
                 />
               </Panel>

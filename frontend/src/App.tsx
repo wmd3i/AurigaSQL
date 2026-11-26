@@ -11,6 +11,7 @@ import { useChat } from "./state/useChat";
 import { bff, type DemoGroupId, type DataSource, type ModelInfo } from "./api/bff";
 import { ModelContext } from "./state/modelContext";
 import { loadAppState, saveAppState } from "./state/persistence";
+import { conversationWorkId } from "./lib/conversationHistory";
 import { buildNodes, type ThreadNode } from "./lib/buildNodes";
 import type { Conversation } from "./state/types";
 import type { BranchTarget } from "./components/canvas/CanvasComposer";
@@ -37,18 +38,6 @@ function createCanvasWorkId() {
   return `canvas_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function canvasWorkIdForConversation(conversations: Conversation[], conv: Conversation): string {
-  if (conv.canvasWorkId) return conv.canvasWorkId;
-  const byId = new Map(conversations.map((item) => [item.id, item]));
-  let current: Conversation | undefined = conv;
-  const seen = new Set<string>();
-  while (current?.parentThreadId && !seen.has(current.id)) {
-    seen.add(current.id);
-    current = byId.get(current.parentThreadId);
-  }
-  return current?.id ?? conv.id;
-}
-
 function canvasWorkIdForStart(
   conversations: Conversation[],
   currentCanvasWorkId: string | null,
@@ -56,7 +45,7 @@ function canvasWorkIdForStart(
 ) {
   if (branchTarget) {
     const parent = conversations.find((conversation) => conversation.id === branchTarget.parentThreadId);
-    return parent ? canvasWorkIdForConversation(conversations, parent) : branchTarget.parentThreadId;
+    return parent ? conversationWorkId(conversations, parent) : branchTarget.parentThreadId;
   }
   return currentCanvasWorkId ?? createCanvasWorkId();
 }
@@ -215,18 +204,6 @@ export default function App() {
   }, [chat.subscribe, state.conversations]);
 
   const activeConversation = state.conversations.find((c) => c.id === state.activeId) ?? null;
-  const canvasConversations =
-    state.canvasScope === "active"
-      ? activeConversation
-        ? [activeConversation]
-        : []
-      : state.conversations.filter(
-          (conversation) =>
-            conversation.mode === "workspace" &&
-            state.currentCanvasWorkId &&
-            canvasWorkIdForConversation(state.conversations, conversation) === state.currentCanvasWorkId,
-        );
-
   // Both modes start a real agent thread immediately; canvas mode simply opens
   // that thread on the canvas instead of the answer-first result page.
   const onStart = (
@@ -249,7 +226,7 @@ export default function App() {
         mode,
         modelId,
         branchTarget ? { ...branchTarget, parentContext } : null,
-        mode === "workspace" ? (branchTarget ? "all" : "active") : undefined,
+        mode === "workspace" ? "all" : undefined,
         signal,
         { ...options, canvasWorkId },
       );
@@ -257,6 +234,11 @@ export default function App() {
 
   const onDeleteConversation = (id: string) => {
     void chat.deleteConversation(id);
+  };
+
+  const openConversation = (id: string, view?: "result" | "canvas") => {
+    setCanvasSourceMismatch(null);
+    dispatch({ type: "OPEN_CONVERSATION", id, view });
   };
 
   const clearCanvasTransitionTimer = () => {
@@ -324,7 +306,7 @@ export default function App() {
       "workspace",
       modelId,
       branchTarget ? { ...branchTarget, parentContext } : null,
-      branchTarget ? "all" : "active",
+      "all",
       undefined,
       { canvasTone, canvasWorkId },
     );
@@ -353,11 +335,12 @@ export default function App() {
   if (state.view === "result" && activeConversation) {
     content = (
       <AgentResultPage
+        key={activeConversation.id}
         conversation={activeConversation}
         conversations={state.conversations}
-        onShowProcess={() => dispatch({ type: "SET_VIEW", view: "canvas", canvasScope: "active" })}
+        onShowProcess={() => dispatch({ type: "SET_VIEW", view: "canvas", canvasScope: "all" })}
         onNewFlow={() => dispatch({ type: "NEW_FLOW" })}
-        onOpen={(id) => dispatch({ type: "OPEN_CONVERSATION", id })}
+        onOpen={openConversation}
         onDeleteConversation={onDeleteConversation}
         onRevertConversation={chat.revertConversationToNode}
         onOpenWorkspaceSetup={openWorkspaceSetup}
@@ -376,7 +359,7 @@ export default function App() {
         conversations={state.conversations}
         onNewFlow={() => dispatch({ type: "NEW_FLOW" })}
         onBack={() => dispatch({ type: "SET_VIEW", view: "home" })}
-        onOpen={(id) => dispatch({ type: "OPEN_CONVERSATION", id })}
+        onOpen={openConversation}
         onDeleteConversation={onDeleteConversation}
         onOpenLlmConfig={() => setLlmConfigOpen(true)}
       />
@@ -384,16 +367,16 @@ export default function App() {
   } else if (state.view === "canvas" && state.canvasDb) {
     content = (
       <CanvasPage
-        conversations={canvasConversations}
+        conversations={state.conversations}
+        key={state.currentCanvasWorkId}
+        onSelectConversation={(id) => openConversation(id, "canvas")}
         canvasDb={state.canvasDb}
         activeId={state.activeId}
         onDeleteConversation={onDeleteConversation}
         onRevertConversation={chat.revertConversationToNode}
-        backToResult={
-          activeConversation?.mode === "agent"
-            ? () => dispatch({ type: "SET_VIEW", view: "result" })
-            : undefined
-        }
+        onShowChat={() => activeConversation
+          ? dispatch({ type: "SET_VIEW", view: "result" })
+          : dispatch({ type: "NEW_FLOW" })}
         onStart={(database, query, branchTarget, canvasTone) => {
           const parentContext = buildBranchParentContext(state.conversations, branchTarget);
           const parentConversation = branchTarget
@@ -464,7 +447,7 @@ export default function App() {
         conversations={state.conversations}
         activeId={state.activeId}
         onNewFlow={() => dispatch({ type: "NEW_FLOW" })}
-        onOpen={(id) => dispatch({ type: "OPEN_CONVERSATION", id })}
+        onOpen={openConversation}
         onDeleteConversation={onDeleteConversation}
         onStart={onStart}
         selectedDataSource={workspaceSource}

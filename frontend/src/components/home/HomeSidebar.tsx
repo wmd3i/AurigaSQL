@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Database, PanelLeft, PanelLeftClose, Settings2, SquarePen, Trash2 } from "lucide-react";
 import type { DataSource } from "../../api/bff";
 import type { Conversation } from "../../state/types";
+import { buildHistoryItems } from "../../lib/conversationHistory";
 import { DialectIcon } from "./DialectIcon";
 import { useResizable } from "../../lib/useResizable";
 import { ResizeHandle } from "../ResizeHandle";
@@ -10,57 +11,6 @@ import { inferDataEngine } from "../../lib/databaseEngine";
 
 const SIDEBAR_BG = "app-shell-bg";
 type SidebarSection = "chat" | "workspace";
-type RecentItem = {
-  key: string;
-  primary: Conversation;
-  conversations: Conversation[];
-  latestAt: number;
-};
-
-function canvasWorkKey(conversationsById: Map<string, Conversation>, conv: Conversation) {
-  if (conv.canvasWorkId) return conv.canvasWorkId;
-  let current: Conversation | undefined = conv;
-  const seen = new Set<string>();
-  while (current?.parentThreadId && !seen.has(current.id)) {
-    seen.add(current.id);
-    current = conversationsById.get(current.parentThreadId);
-  }
-  return current?.id ?? conv.id;
-}
-
-function buildRecentItems(conversations: Conversation[]): RecentItem[] {
-  const conversationsById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
-  const workspaceGroups = new Map<string, Conversation[]>();
-  const items: RecentItem[] = [];
-
-  conversations.forEach((conversation) => {
-    if (conversation.mode !== "workspace") {
-      items.push({
-        key: conversation.id,
-        primary: conversation,
-        conversations: [conversation],
-        latestAt: conversation.createdAt,
-      });
-      return;
-    }
-    const key = canvasWorkKey(conversationsById, conversation);
-    workspaceGroups.set(key, [...(workspaceGroups.get(key) ?? []), conversation]);
-  });
-
-  workspaceGroups.forEach((group, key) => {
-    const oldestFirst = [...group].sort((a, b) => a.createdAt - b.createdAt);
-    const primary = oldestFirst.find((conversation) => !conversation.parentThreadId) ?? oldestFirst[0];
-    items.push({
-      key,
-      primary,
-      conversations: group,
-      latestAt: Math.max(...group.map((conversation) => conversation.createdAt)),
-    });
-  });
-
-  return items.sort((a, b) => b.latestAt - a.latestAt);
-}
-
 export function HomeSidebar(props: {
   conversations: Conversation[];
   onNewFlow: () => void;
@@ -84,7 +34,7 @@ export function HomeSidebar(props: {
   });
   const readySources = (props.dataSources ?? []).filter((source) => source.ready);
   const activeConversation = props.conversations.find((conversation) => conversation.id === props.activeConversationId) ?? null;
-  const recentItems = useMemo(() => buildRecentItems(props.conversations), [props.conversations]);
+  const recentItems = useMemo(() => buildHistoryItems(props.conversations), [props.conversations]);
   const knownDatabases =
     readySources.length > 0
       ? Array.from(new Set(props.databases ?? [])).filter(Boolean)
@@ -203,7 +153,7 @@ export function HomeSidebar(props: {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mb-2 px-2 text-[16px] font-semibold text-muted">Recents</div>
+        <div className="mb-2 px-2 text-[16px] font-semibold text-muted">History</div>
         {recentItems.length === 0 && (
           <p className="px-2 text-[12px] text-faint">No conversations yet.</p>
         )}
@@ -219,7 +169,7 @@ export function HomeSidebar(props: {
               )}
             >
               <button
-                onClick={() => props.onOpen(c.id)}
+                onClick={() => props.onOpen(item.latest.id)}
                 className="min-w-0 flex-1 text-left"
               >
                 <span className={cn("block w-full truncate text-[14.5px]", selected ? "text-accent" : "text-ink")}>
