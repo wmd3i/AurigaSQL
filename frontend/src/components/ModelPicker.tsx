@@ -53,15 +53,15 @@ export function ModelPicker(props: {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        title="Change model"
-        onClick={() => selected && setOpen((value) => !value)}
+        title={selected ? "Change model" : "Select a model"}
+        onClick={() => (selected ? setOpen((value) => !value) : props.onOpenConfig?.())}
         className={cn(
           variant === "inline"
             ? "flex min-w-[104px] items-center gap-2 rounded-full px-2 py-2 text-left text-[13.5px] transition hover:bg-hover"
             : "flex min-w-[180px] items-center gap-2 rounded-full border border-line bg-surface px-3 py-2 text-left text-[12px] shadow-sm transition",
           variant === "inline"
-            ? selected ? "text-ink" : "cursor-default opacity-95"
-            : selected ? (open ? "border-accent/30 bg-card" : "hover:bg-hover") : "cursor-default opacity-95",
+            ? selected || props.onOpenConfig ? "text-ink" : "cursor-default opacity-95"
+            : selected || props.onOpenConfig ? (open ? "border-accent/30 bg-card" : "hover:bg-hover") : "cursor-default opacity-95",
           props.buttonClassName,
         )}
       >
@@ -76,7 +76,7 @@ export function ModelPicker(props: {
           variant === "inline" ? "font-medium" : "font-semibold",
           variant === "inline" ? "text-muted" : selected ? "text-accent" : "text-muted",
         )}>
-          {selected?.label ?? "Set up model"}
+          {selected?.label ?? "Select a model"}
         </span>
         {selected && <ChevronDown className={cn(variant === "inline" ? "h-[15px] w-[15px]" : "h-3.5 w-3.5", "shrink-0 text-muted transition", open && "rotate-180")} />}
       </button>

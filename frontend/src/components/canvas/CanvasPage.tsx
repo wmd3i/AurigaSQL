@@ -1362,8 +1362,8 @@ function CanvasInner(props: {
             </button>
             <button
               onClick={props.onOpenLlmConfig}
-              title="Setup model"
-              aria-label="Setup model"
+              title="Model settings"
+              aria-label="Model settings"
               className={cn(
                 "flex items-center justify-center text-muted transition-colors hover:bg-hover hover:text-ink",
                 props.embedded ? "mt-2.5 h-9 w-9 rounded-[16px]" : "mt-3 h-11 w-11 rounded-[20px]",

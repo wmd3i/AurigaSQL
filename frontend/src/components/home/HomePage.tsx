@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { bff, type DemoGroupId, type DataSource, type TaskItem } from "../../api/bff";
 import { useModels } from "../../state/modelContext";
 import type { Conversation } from "../../state/types";
@@ -168,7 +169,10 @@ export function HomePage(props: {
     const query = draft.trim();
     if (!query || busy) return;
     if (!modelId) {
-      setHint("Please set up a model first from LLM Configure");
+      toast.error("Select a model before asking a question", {
+        id: "model-not-selected",
+        action: { label: "Select model", onClick: props.onOpenLlmConfig },
+      });
       return;
     }
 
