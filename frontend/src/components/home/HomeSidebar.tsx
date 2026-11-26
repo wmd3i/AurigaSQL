@@ -6,6 +6,7 @@ import { DialectIcon } from "./DialectIcon";
 import { useResizable } from "../../lib/useResizable";
 import { ResizeHandle } from "../ResizeHandle";
 import { cn } from "../../lib/cn";
+import { useOpenSettings } from "../../state/settingsContext";
 import { inferDataEngine } from "../../lib/databaseEngine";
 
 const SIDEBAR_BG = "app-shell-bg";
@@ -75,6 +76,7 @@ export function HomeSidebar(props: {
   onSelectDataSource?: (source: DataSource) => void;
   onOpenLlmConfig?: () => void;
 }) {
+  const openSettings = useOpenSettings();
   const [collapsed, setCollapsed] = useState(false);
   const { width, dragging, onPointerDown } = useResizable({
     initial: 288,
@@ -139,7 +141,7 @@ export function HomeSidebar(props: {
           <Database className="h-4 w-4" />
         </button>
         <button
-          onClick={props.onOpenLlmConfig}
+          onClick={openSettings ? () => openSettings() : props.onOpenLlmConfig}
           title="Settings"
           aria-label="Settings"
           className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-hover hover:text-ink"
@@ -300,7 +302,7 @@ export function HomeSidebar(props: {
       <div className="mt-3 border-t border-line px-2 pt-2">
         <button
           type="button"
-          onClick={props.onOpenLlmConfig}
+          onClick={openSettings ? () => openSettings() : props.onOpenLlmConfig}
           className="flex w-full items-center gap-2 rounded-xl px-2 py-1 text-left transition hover:bg-hover"
         >
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-soft text-accent">

@@ -706,6 +706,8 @@ function sleep(ms: number): Promise<void> {
 
 export function LlmConfigModal(props: {
   open: boolean;
+  /** Render inside another panel (Settings → Models): no overlay, card chrome or close button. */
+  embedded?: boolean;
   onClose: () => void;
   onModelsChanged: (preferredModelId?: string) => Promise<void> | void;
 }) {
@@ -1029,13 +1031,25 @@ export function LlmConfigModal(props: {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(12,16,12,0.32)] p-4 backdrop-blur-sm"
+      className={cn(
+        props.embedded
+          ? "flex min-h-0 flex-1 flex-col"
+          : "fixed inset-0 z-50 flex items-center justify-center bg-[rgba(12,16,12,0.32)] p-4 backdrop-blur-sm",
+      )}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) props.onClose();
+        if (!props.embedded && event.target === event.currentTarget && !saving) props.onClose();
       }}
     >
-      <div className="relative flex max-h-[90vh] w-full max-w-[480px] flex-col overflow-hidden rounded-[24px] border border-line bg-card shadow-[0_32px_100px_rgba(11,18,14,0.18)]">
-        <header className="flex items-center gap-2 px-6 pb-2 pt-5">
+      <div
+        className={cn(
+          "relative flex flex-col overflow-hidden",
+          props.embedded
+            ? "min-h-0 flex-1"
+            : "max-h-[90vh] w-full max-w-[480px] rounded-[24px] border border-line bg-card shadow-[0_32px_100px_rgba(11,18,14,0.18)]",
+        )}
+      >
+        {(!props.embedded || view === "form") && (
+        <header className={cn("flex items-center gap-2 px-6 pb-2", props.embedded ? "pt-4" : "pt-5")}>
           {canGoBack && (
             <button
               type="button"
@@ -1048,7 +1062,8 @@ export function LlmConfigModal(props: {
               <ArrowLeft className="h-4 w-4" />
             </button>
           )}
-          <h2 className="flex-1 text-[18px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
+          <h2 className={cn("flex-1 font-semibold tracking-[-0.01em] text-ink", props.embedded ? "text-[15px]" : "text-[18px]")}>{title}</h2>
+          {!props.embedded && (
           <button
             type="button"
             onClick={props.onClose}
@@ -1058,10 +1073,12 @@ export function LlmConfigModal(props: {
           >
             <X className="h-4 w-4" />
           </button>
+          )}
         </header>
+        )}
 
         {view === "list" ? (
-          <div className={cn("flex flex-col gap-2 px-6 pb-6 pt-2", SCROLLBAR)}>
+          <div className={cn("flex flex-col gap-2 px-6 pb-6", props.embedded ? "pt-5" : "pt-2", SCROLLBAR)}>
             {loading && (
               <span className="inline-flex items-center gap-2 py-2 text-[13px] text-muted">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1122,7 +1139,7 @@ export function LlmConfigModal(props: {
           </div>
         ) : (
           <>
-            <div className={cn("flex flex-col gap-4 px-6 pb-2 pt-2", SCROLLBAR)}>
+            <div className={cn("flex flex-col gap-4 px-6 pb-2 pt-2", props.embedded && "min-h-0 flex-1", SCROLLBAR)}>
               {readOnly && (
                 <p className="text-[12.5px] leading-5 text-muted">
                   This model comes from server settings and can only be selected, not edited.
