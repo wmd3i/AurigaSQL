@@ -629,9 +629,10 @@ function CanvasInner(props: {
   function getFloatingDraftPosition() {
     const viewport = rf.getViewport();
     const sidebarSpace = leftChromeWidth;
-    const hostRect = canvasHostRef.current?.getBoundingClientRect();
-    const viewportWidth = hostRect?.width ?? window.innerWidth;
-    const viewportHeight = hostRect?.height ?? window.innerHeight;
+    // Layout dimensions stay stable while the canvas entrance animates its scale.
+    const host = canvasHostRef.current;
+    const viewportWidth = host?.clientWidth || window.innerWidth;
+    const viewportHeight = host?.clientHeight || window.innerHeight;
     const chromePaddingX = props.embedded ? 88 : 120;
     const chromePaddingY = props.embedded ? 88 : 120;
     const visibleWidth = Math.max(420, viewportWidth - sidebarSpace - rightChromeWidth - chromePaddingX);
@@ -889,9 +890,10 @@ function CanvasInner(props: {
       }
 
       const sidebarSpace = leftChromeWidth;
-      const hostRect = canvasHostRef.current?.getBoundingClientRect();
-      const viewportWidth = hostRect?.width ?? window.innerWidth;
-      const viewportHeight = hostRect?.height ?? window.innerHeight;
+      // Layout dimensions stay stable while the canvas entrance animates its scale.
+      const host = canvasHostRef.current;
+      const viewportWidth = host?.clientWidth || window.innerWidth;
+      const viewportHeight = host?.clientHeight || window.innerHeight;
       const chromePaddingX = props.embedded ? 88 : 120;
       const chromePaddingY = props.embedded ? 88 : 120;
       const visibleWidth = Math.max(360, viewportWidth - sidebarSpace - rightChromeWidth - chromePaddingX);
