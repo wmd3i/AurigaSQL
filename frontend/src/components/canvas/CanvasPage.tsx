@@ -923,18 +923,19 @@ function CanvasInner(props: {
     [leftChromeWidth, props.embedded, rf, rightChromeWidth],
   );
 
+  // Entry and the Fit button must use the same nodes and viewport options.
+  const fitCanvasView = useCallback(() => {
+    const ids = rf.getNodes().filter((node) => !node.hidden).map((node) => node.id);
+    focusCanvasNodes(ids, { padding: 0.2, maxZoom: 1, upperBias: 0, duration: 320 });
+  }, [focusCanvasNodes, rf]);
+
   const focusedCanvasThreadId = focusThreadId ?? props.activeId ?? null;
-  const focusedThreadNodeIds = useMemo(
-    () =>
-      focusedCanvasThreadId
-        ? nodes.filter((n) => n.id.startsWith(`${focusedCanvasThreadId}:`) && n.type === "card").map((n) => n.id)
-        : [],
-    [focusedCanvasThreadId, nodes],
-  );
-  const focusedThreadSignature = useMemo(
-    () => focusedThreadNodeIds.map((id) => `${id}:${nodeHeights[id] ?? "pending"}`).join("|"),
-    [focusedThreadNodeIds, nodeHeights],
-  );
+  // Refit after content has been measured, including sibling threads and composers.
+  // Positions are deliberately excluded so dragging cards does not trigger a refit.
+  const canvasContentSignature = nodes
+    .filter((node) => !node.hidden)
+    .map((node) => `${node.id}:${node.measured?.width ?? "pending"}:${node.measured?.height ?? "pending"}:${nodeHeights[node.id] ?? "pending"}`)
+    .join("|");
   const focusedThreadPosition = focusedCanvasThreadId ? floatingThreadPositions[focusedCanvasThreadId] : undefined;
 
   const onCardHeightChange = useCallback((id: string, height: number) => {
@@ -1218,17 +1219,17 @@ function CanvasInner(props: {
   }, [allConversationById, branchDrafts, ordered, threadNodes]);
 
   useEffect(() => {
-    if (!focusedCanvasThreadId || !nodesInitialized || focusedThreadNodeIds.length === 0) return;
-    const activeFocusKey = `${focusedCanvasThreadId}:${focusedThreadSignature}:${focusedThreadPosition?.x}:${focusedThreadPosition?.y}:${leftChromeWidth}:${rightChromeWidth}`;
+    if (!nodesInitialized || !canvasContentSignature) return;
+    const activeFocusKey = `${focusedCanvasThreadId}:${canvasContentSignature}:${focusedThreadPosition?.x}:${focusedThreadPosition?.y}:${leftChromeWidth}:${rightChromeWidth}`;
     if (lastActiveFocusRef.current === activeFocusKey) return;
     // Controlled node positions are synchronized to React Flow after render.
     // Fit only after that commit, including the draft's final spawn position.
     const frame = requestAnimationFrame(() => {
       lastActiveFocusRef.current = activeFocusKey;
-      focusCanvasNodes(focusedThreadNodeIds, { ...THREAD_FOCUS, duration: 420 });
+      fitCanvasView();
     });
     return () => cancelAnimationFrame(frame);
-  }, [focusCanvasNodes, focusedCanvasThreadId, focusedThreadNodeIds, focusedThreadSignature, focusedThreadPosition, leftChromeWidth, nodesInitialized, rightChromeWidth]);
+  }, [fitCanvasView, focusedCanvasThreadId, canvasContentSignature, focusedThreadPosition, leftChromeWidth, nodesInitialized, rightChromeWidth]);
 
   const onNodeClick: NodeMouseHandler<CanvasNode> = (_, node) => {
     if (node.type !== "card") return;
@@ -1249,12 +1250,6 @@ function CanvasInner(props: {
     setLeftPanel(null);
     const ids = nodes.filter((n) => n.id.startsWith(`${id}:`)).map((n) => n.id);
     focusCanvasNodes(ids, { ...THREAD_FOCUS, duration: 400 });
-  }
-
-  function fitCanvasView() {
-    // Include every visible thread and composer without changing their layout.
-    const ids = rf.getNodes().filter((node) => !node.hidden).map((node) => node.id);
-    focusCanvasNodes(ids, { padding: 0.2, maxZoom: 1, upperBias: 0, duration: 320 });
   }
 
   function focusNode(canvasId: string) {
