@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { ArrowUp, Check, Copy, GripVertical } from "lucide-react";
+import { ArrowUp, Check, Copy, GripVertical, Loader2 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { ModelPicker } from "../ModelPicker";
 import { CANVAS_TONES, type CanvasToneId } from "../../lib/canvasTones";
+import { scheduleSubmissionNotices } from "../../lib/submissionWait";
 
 export type FloatingDraftData = {
   onSubmit: (text: string, toneId: CanvasToneId) => boolean | void | Promise<boolean | void>;
@@ -23,46 +24,60 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
   const [draft, setDraft] = useState(data.initialText ?? "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [waitNotice, setWaitNotice] = useState<string | null>(null);
+  const requestPending = useRef(false);
+  const mounted = useRef(true);
+  const clearNotices = useRef<(() => void) | null>(null);
   const [toneId, setToneId] = useState<CanvasToneId>("green");
   const [copied, setCopied] = useState(false);
   const tone = CANVAS_TONES.find((item) => item.id === toneId) ?? CANVAS_TONES[0];
 
   useEffect(() => {
-    if (data.initialText === undefined) return;
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      clearNotices.current?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (data.initialText === undefined || requestPending.current) return;
     setDraft(data.initialText);
     setSubmitting(false);
     setError(null);
   }, [data.initialText, data.initialTextToken]);
 
   useEffect(() => {
-    setSubmitting(false);
     setError(null);
   }, [draft]);
 
   async function submit() {
     const text = draft.trim();
-    if (!text || submitting) return;
+    if (!text || requestPending.current) return;
+    requestPending.current = true;
     setSubmitting(true);
     setError(null);
+    setWaitNotice("Creating conversation…");
+    const cleanup = scheduleSubmissionNotices(setWaitNotice);
+    clearNotices.current = cleanup;
     try {
-      const submitted = await Promise.race([
-        Promise.resolve(data.onSubmit(text, toneId)),
-        new Promise<false>((resolve) => {
-          window.setTimeout(() => {
-            setError("Still starting. Please try again or check the data source.");
-            resolve(false);
-          }, 15000);
-        }),
-      ]);
+      const submitted = await data.onSubmit(text, toneId);
+      if (!mounted.current) return;
       if (submitted === false) {
         return;
       }
       setDraft("");
       setError(null);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Could not start this question.");
+      if (mounted.current) setError(submitError instanceof Error ? submitError.message : "Could not start this question.");
     } finally {
-      setSubmitting(false);
+      cleanup();
+      clearNotices.current = null;
+      requestPending.current = false;
+      if (mounted.current) {
+        setSubmitting(false);
+        setWaitNotice(null);
+      }
     }
   }
 
@@ -145,6 +160,7 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
         <textarea
           rows={4}
           value={draft}
+          readOnly={submitting}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -177,14 +193,19 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
               void submit();
             }}
             disabled={!draft.trim() || submitting}
-            className="nodrag nopan nowheel flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-hover text-muted transition hover:bg-invert hover:text-invert-ink disabled:cursor-not-allowed disabled:bg-hover disabled:text-faint disabled:opacity-100 disabled:hover:bg-hover disabled:hover:text-faint"
+            className={cn(
+              "nodrag nopan nowheel flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed",
+              submitting ? "bg-invert text-invert-ink" : draft.trim() ? "bg-invert text-invert-ink hover:opacity-80" : "bg-hover text-faint",
+            )}
+            aria-busy={submitting}
             aria-label={submitting ? "Starting thread" : "Send floating thread"}
             title={submitting ? "Starting..." : "Send"}
           >
-            <ArrowUp className="h-4 w-4" />
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
           </button>
         </div>
-        {error && <p className="mt-2 text-[12px] leading-4 text-danger">{error}</p>}
+        {waitNotice && <p role="status" className="mt-2 text-[12px] leading-4 text-muted">{waitNotice}</p>}
+        {error && <p role="alert" className="mt-2 text-[12px] leading-4 text-danger">{error}</p>}
       </div>
       <Handle type="source" position={Position.Bottom} className="!h-1 !w-1 !border-0 !bg-transparent" />
     </div>
