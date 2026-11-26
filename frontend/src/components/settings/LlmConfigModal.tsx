@@ -704,10 +704,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+export type EmbeddedHeader = { title: string; onBack?: () => void; backDisabled?: boolean };
+
 export function LlmConfigModal(props: {
   open: boolean;
   /** Render inside another panel (Settings → Models): no overlay, card chrome or close button. */
   embedded?: boolean;
+  /** Open on the "Add a model" form even when saved models exist. */
+  startInAdd?: boolean;
+  /** Embedded only: reports the form view's title and back action so the host header can show them. */
+  onHeaderChange?: (header: EmbeddedHeader | null) => void;
   onClose: () => void;
   onModelsChanged: (preferredModelId?: string) => Promise<void> | void;
 }) {
@@ -749,7 +755,7 @@ export function LlmConfigModal(props: {
       setData(response);
       setSelectedId(NEW_ID);
       setDemoSelected(false);
-      setView(response.profiles.length > 0 ? "list" : "form");
+      setView(response.profiles.length > 0 && !props.startInAdd ? "list" : "form");
     } catch (err) {
       setError(String(err));
     } finally {
@@ -827,6 +833,24 @@ export function LlmConfigModal(props: {
     setError("");
     setDeletePending(false);
   }, [selectedProfile]);
+
+  // Embedded: the host panel owns the header, so tell it what this view should be titled.
+  const { onHeaderChange } = props;
+  const hasSavedProfiles = (data?.profiles.length ?? 0) > 0;
+  useEffect(() => {
+    if (!props.embedded || !onHeaderChange) return;
+    if (view !== "form") {
+      onHeaderChange(null);
+      return;
+    }
+    onHeaderChange({
+      title: selectedProfile ? "Edit model" : "Add a model",
+      onBack: hasSavedProfiles && data ? () => showList(data) : undefined,
+      backDisabled: saving,
+    });
+  }, [props.embedded, onHeaderChange, view, selectedProfile, hasSavedProfiles, data, saving]);
+
+  useEffect(() => () => onHeaderChange?.(null), [onHeaderChange]);
 
   if (!props.open) return null;
 
@@ -1048,7 +1072,7 @@ export function LlmConfigModal(props: {
             : "max-h-[90vh] w-full max-w-[480px] rounded-[24px] border border-line bg-card shadow-[0_32px_100px_rgba(11,18,14,0.18)]",
         )}
       >
-        {(!props.embedded || view === "form") && (
+        {!props.embedded && (
         <header className={cn("flex items-center gap-2 px-6 pb-2", props.embedded ? "pt-4" : "pt-5")}>
           {canGoBack && (
             <button
@@ -1078,7 +1102,7 @@ export function LlmConfigModal(props: {
         )}
 
         {view === "list" ? (
-          <div className={cn("flex flex-col gap-2 px-6 pb-6", props.embedded ? "pt-5" : "pt-2", SCROLLBAR)}>
+          <div className={cn("flex flex-col gap-2 px-6 pb-6", props.embedded ? "pt-4" : "pt-2", SCROLLBAR)}>
             {loading && (
               <span className="inline-flex items-center gap-2 py-2 text-[13px] text-muted">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1139,7 +1163,7 @@ export function LlmConfigModal(props: {
           </div>
         ) : (
           <>
-            <div className={cn("flex flex-col gap-4 px-6 pb-2 pt-2", props.embedded && "min-h-0 flex-1", SCROLLBAR)}>
+            <div className={cn("flex flex-col gap-4 px-6 pb-2", props.embedded ? "min-h-0 flex-1 pt-4" : "pt-2", SCROLLBAR)}>
               {readOnly && (
                 <p className="text-[12.5px] leading-5 text-muted">
                   This model comes from server settings and can only be selected, not edited.

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Anthropic, Gemini, Kimi, Minimax, OpenAI, XAI, ZAI } from "@lobehub/icons";
 import { Check, ChevronDown, Plus, Settings2, Sparkles } from "lucide-react";
 import { useModels } from "../state/modelContext";
+import { useOpenSettings } from "../state/settingsContext";
 import { cn } from "../lib/cn";
 
 const PROVIDER_LOGO: Record<string, ComponentType<{ size: number }>> = {
@@ -24,6 +25,7 @@ export function ModelPicker(props: {
   onOpenConfig?: () => void;
 }) {
   const { models, selectedId, setSelectedId } = useModels();
+  const openSettings = useOpenSettings();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const selected = models.find((m) => m.id === selectedId) ?? models[0] ?? null;
@@ -144,7 +146,8 @@ export function ModelPicker(props: {
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  props.onOpenConfig?.();
+                  if (openSettings) openSettings("models", { addModel: true });
+                  else props.onOpenConfig?.();
                 }}
                 className={cn(
                   "mt-1 flex items-center gap-2 border-t border-line px-3 text-left font-semibold text-muted transition hover:text-ink",
