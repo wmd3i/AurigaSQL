@@ -2,7 +2,7 @@ import { useCallback, useRef, type Dispatch } from "react";
 import { bff } from "../api/bff";
 import type { EventStreamHandle } from "../api/eventStream";
 import { openTaskStream } from "../api/eventSocket";
-import type { Action, CanvasScope, QueryMode } from "./types";
+import { CHAT_START_NAVIGATION, type Action, type CanvasScope, type QueryMode } from "./types";
 import type { DataSource } from "../api/bff";
 import type { CanvasToneId } from "../lib/canvasTones";
 
@@ -142,7 +142,14 @@ export function useChat(dispatch: Dispatch<Action>) {
       signal?: AbortSignal,
       options?: { preserveView?: boolean; canvasTone?: CanvasToneId; canvasWorkId?: string | null },
     ) => {
-      const started = await bff.startFreechat(source.id, query, model, branchFrom?.parentContext ?? null, signal); // throws → caller shows inline error
+      signal?.throwIfAborted();
+      // Receive the task ID even if the caller leaves during creation.
+      const started = await bff.startFreechat(source.id, query, model, branchFrom?.parentContext ?? null);
+      const background = signal?.aborted && signal.reason === CHAT_START_NAVIGATION;
+      if (signal?.aborted && !background) {
+        await bff.cleanup(started.task_id);
+        return;
+      }
       dispatch({
         type: "CONVERSATION_STARTED",
         id: started.task_id,
@@ -159,6 +166,7 @@ export function useChat(dispatch: Dispatch<Action>) {
         canvasTone: options?.canvasTone,
         canvasScope,
         preserveView: options?.preserveView,
+        background,
       });
       sendMessage(started.task_id, query, model);
       // Fire-and-forget: a short AI title for the sidebar (from the first query).

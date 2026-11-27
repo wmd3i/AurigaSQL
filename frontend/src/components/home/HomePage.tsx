@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { bff, type DemoGroupId, type DataSource, type TaskItem } from "../../api/bff";
 import { useModels } from "../../state/modelContext";
-import type { Conversation } from "../../state/types";
+import { CHAT_START_NAVIGATION, type Conversation } from "../../state/types";
 import { HomeSidebar } from "./HomeSidebar";
 import { HomeHero } from "./HomeHero";
 import { HomeComposer } from "./HomeComposer";
@@ -12,6 +12,7 @@ import type { QueryMode } from "../../state/types";
 import { FlowModeSwitch } from "../FlowModeSwitch";
 import type { BranchTarget } from "../canvas/CanvasComposer";
 import type { CanvasToneId } from "../../lib/canvasTones";
+import { PendingChatMain } from "../result/PendingChatMain";
 
 type SourceMismatch = {
   query: string;
@@ -23,6 +24,12 @@ type SourceMismatch = {
   parentContext?: string;
   canvasTone?: CanvasToneId;
   preserveView?: boolean;
+};
+
+type PendingChat = {
+  title: string;
+  database?: string;
+  showChatPreview?: boolean;
 };
 
 const AUTO_MATCH_MANUAL_SELECT_HINT =
@@ -61,7 +68,7 @@ export function HomePage(props: {
   const [hint, setHint] = useState<string | null>(null);
   const [sourceMismatch, setSourceMismatch] = useState<SourceMismatch | null>(null);
   const [highlight, setHighlight] = useState(false);
-  const [pendingChat, setPendingChat] = useState<{ title: string; database?: string } | null>(null);
+  const [pendingChat, setPendingChat] = useState<PendingChat | null>(null);
   const startControllerRef = useRef<AbortController | null>(null);
   const busy = pendingChat !== null;
   const selectedSource = sources.find((source) => source.id === selectedSourceId && source.ready) ?? null;
@@ -87,11 +94,12 @@ export function HomePage(props: {
     setSourceMismatch(null);
   }
 
-  async function sourceForQuery(query: string): Promise<{ source: DataSource; mismatch: SourceMismatch | null }> {
+  async function sourceForQuery(query: string, signal: AbortSignal): Promise<{ source: DataSource; mismatch: SourceMismatch | null }> {
     let resolved: Awaited<ReturnType<typeof bff.resolveDataSource>>;
     try {
-      resolved = await bff.resolveDataSource(query, modelId);
+      resolved = await bff.resolveDataSource(query, modelId, signal);
     } catch (error) {
+      if (signal.aborted) throw error;
       if (selectedSource) {
         return { source: selectedSource, mismatch: null };
       }
@@ -129,14 +137,13 @@ export function HomePage(props: {
   }
 
   async function runPendingStart(
-    title: string,
-    database: string | undefined,
+    pending: PendingChat,
     start: (signal: AbortSignal) => Promise<void>,
   ) {
     if (startControllerRef.current) return;
     const controller = new AbortController();
     startControllerRef.current = controller;
-    setPendingChat({ title, database });
+    setPendingChat(pending);
     setHint(null);
     try {
       await start(controller.signal);
@@ -152,7 +159,7 @@ export function HomePage(props: {
 
   async function startPendingMismatch(source: DataSource) {
     if (!sourceMismatch) return;
-    await runPendingStart(sourceMismatch.query, source.display_name, async (signal) => {
+    await runPendingStart({ title: sourceMismatch.query, database: source.display_name }, async (signal) => {
       await startWithSource(
         source,
         sourceMismatch.query,
@@ -182,6 +189,11 @@ export function HomePage(props: {
     bff.tasks(1000).then((r) => setTasks(r.tasks)).catch(() => {}); // dataset has ~300 tasks; default 200 dropped later DBs
   }, []);
 
+  useEffect(() => () => {
+    startControllerRef.current?.abort(CHAT_START_NAVIGATION);
+    startControllerRef.current = null;
+  }, []);
+
   async function handleSend() {
     const query = draft.trim();
     if (!query || busy) return;
@@ -202,14 +214,19 @@ export function HomePage(props: {
       return;
     }
 
-    await runPendingStart(query, selectedSource?.display_name, async (signal) => {
-      const { source, mismatch } = await sourceForQuery(query);
+    const pending = {
+      title: query,
+      database: selectedSource?.display_name,
+      showChatPreview: !selectedSource,
+    };
+    await runPendingStart(pending, async (signal) => {
+      const { source, mismatch } = await sourceForQuery(query, signal);
       if (signal.aborted) return;
       if (mismatch) {
         setSourceMismatch(mismatch);
         return;
       }
-      setPendingChat({ title: query, database: source.display_name });
+      setPendingChat({ ...pending, database: source.display_name });
       await startWithSource(source, query, "agent", signal);
     });
   }
@@ -244,7 +261,9 @@ export function HomePage(props: {
   }
 
   function handleModeChange(mode: QueryMode) {
-    if (mode === "workspace") props.onOpenCanvas(selectedSource);
+    if (mode !== "workspace") return;
+    handlePauseStart();
+    props.onOpenCanvas(selectedSource);
   }
 
   return (
@@ -254,7 +273,11 @@ export function HomePage(props: {
         pendingChat={pendingChat}
         activeSection="chat"
         activeConversationId={props.activeId}
-        onNewFlow={props.onNewFlow}
+        onNewFlow={() => {
+          handlePauseStart();
+          setDraft("");
+          props.onNewFlow();
+        }}
         onOpenWorkspaceSetup={props.onOpenWorkspaceSetup}
         onOpen={props.onOpen}
         onDeleteConversation={props.onDeleteConversation}
@@ -264,63 +287,72 @@ export function HomePage(props: {
         onSelectDataSource={selectSource}
         onOpenLlmConfig={props.onOpenLlmConfig}
       />
-      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto px-6 py-6 sm:px-8 lg:px-12">
-        <div className="-ml-3 flex justify-start sm:-ml-4">
-          <FlowModeSwitch mode="agent" onModeChange={handleModeChange} />
-        </div>
-        <div className="mx-auto flex w-full max-w-5xl flex-col pt-14 sm:pt-20">
-          <div className="mb-12">
-            <HomeHero variant="default" />
+      {pendingChat?.showChatPreview ? (
+        <PendingChatMain
+          title={pendingChat.title}
+          database={pendingChat.database}
+          onStop={handlePauseStart}
+          onModeChange={handleModeChange}
+        />
+      ) : (
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto px-6 py-6 sm:px-8 lg:px-12">
+          <div className="-ml-3 flex justify-start sm:-ml-4">
+            <FlowModeSwitch mode="agent" onModeChange={handleModeChange} />
           </div>
-          <div className="mx-auto w-full max-w-4xl space-y-5">
-            <div className="relative w-full">
-              <HomeComposer
-                value={draft}
-                onChange={setDraft}
-                onSend={handleSend}
-                onStop={handlePauseStart}
-                onOpenDataSetup={props.onOpenWorkspaceSetup}
-                mode="agent"
-                onModeChange={handleModeChange}
-                busy={busy}
-                hasDataSource={sources.some((source) => source.ready)}
-                hint={hint}
-                onOpenLlmConfig={props.onOpenLlmConfig}
+          <div className="mx-auto flex w-full max-w-5xl flex-col pt-14 sm:pt-20">
+            <div className="mb-12">
+              <HomeHero variant="default" />
+            </div>
+            <div className="mx-auto w-full max-w-4xl space-y-5">
+              <div className="relative w-full">
+                <HomeComposer
+                  value={draft}
+                  onChange={setDraft}
+                  onSend={handleSend}
+                  onStop={handlePauseStart}
+                  onOpenDataSetup={props.onOpenWorkspaceSetup}
+                  mode="agent"
+                  onModeChange={handleModeChange}
+                  busy={busy}
+                  hasDataSource={sources.some((source) => source.ready)}
+                  hint={hint}
+                  onOpenLlmConfig={props.onOpenLlmConfig}
+                />
+              </div>
+              {sources.length > 0 && (
+                <DataSourceTabs
+                  sources={sources}
+                  selectedSourceId={selectedSourceId}
+                  onSelectSource={selectSource}
+                  onSelectAutoSource={selectAutoSource}
+                  sourceMismatch={
+                    sourceMismatch
+                      ? {
+                          selectedName: sourceMismatch.selectedSource.display_name,
+                          suggestedName: sourceMismatch.suggestedSource.display_name,
+                          reason: sourceMismatch.reason,
+                        }
+                      : null
+                  }
+                  onUseSuggestedSource={() => void startPendingMismatch(sourceMismatch!.suggestedSource)}
+                  onConfirmSelectedSource={() => void startPendingMismatch(sourceMismatch!.selectedSource)}
+                  onDeleteConnection={handleDeleteConnection}
+                  onDisconnectDemoGroup={handleDisconnectDemoGroup}
+                  highlight={highlight}
+                />
+              )}
+            </div>
+            <div className="mt-20 transition-all duration-300 ease-out">
+              <QuestionCards
+                tasks={visibleTasks}
+                onPick={(t) => {
+                  setDraft(t.amb_user_query);
+                }}
               />
             </div>
-            {sources.length > 0 && (
-              <DataSourceTabs
-                sources={sources}
-                selectedSourceId={selectedSourceId}
-                onSelectSource={selectSource}
-                onSelectAutoSource={selectAutoSource}
-                sourceMismatch={
-                  sourceMismatch
-                    ? {
-                        selectedName: sourceMismatch.selectedSource.display_name,
-                        suggestedName: sourceMismatch.suggestedSource.display_name,
-                        reason: sourceMismatch.reason,
-                      }
-                    : null
-                }
-                onUseSuggestedSource={() => void startPendingMismatch(sourceMismatch!.suggestedSource)}
-                onConfirmSelectedSource={() => void startPendingMismatch(sourceMismatch!.selectedSource)}
-                onDeleteConnection={handleDeleteConnection}
-                onDisconnectDemoGroup={handleDisconnectDemoGroup}
-                highlight={highlight}
-              />
-            )}
           </div>
-          <div className="mt-20 transition-all duration-300 ease-out">
-            <QuestionCards
-              tasks={visibleTasks}
-              onPick={(t) => {
-                setDraft(t.amb_user_query);
-              }}
-            />
-          </div>
-        </div>
-      </main>
+        </main>
+      )}
     </div>
   );
 }

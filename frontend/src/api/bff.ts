@@ -623,8 +623,8 @@ export const bff = {
   }) => jsonFetch("/llm/configs/test", { json: payload, timeoutMs: ROUTE_REQUEST_TIMEOUT_MS }, parseConnectionTestResponse),
   tasks: (limit = 200) =>
     jsonFetch(`/tasks?limit=${limit}`, { method: "GET", timeoutMs: SHORT_REQUEST_TIMEOUT_MS }, parseTasksResponse),
-  resolveDataSource: (query: string, model?: string | null) =>
-    jsonFetch("/data-sources/resolve", { json: { query, model }, timeoutMs: ROUTE_REQUEST_TIMEOUT_MS }, parseResolveDataSourceResponse),
+  resolveDataSource: (query: string, model?: string | null, signal?: AbortSignal) =>
+    jsonFetch("/data-sources/resolve", { json: { query, model }, signal, timeoutMs: ROUTE_REQUEST_TIMEOUT_MS }, parseResolveDataSourceResponse),
   startFreechat: (
     source_id: string,
     query: string,
