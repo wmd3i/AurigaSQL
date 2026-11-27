@@ -134,6 +134,7 @@ function normalizeState(value: unknown): AppState {
   return {
     view: "home",
     conversations,
+    pendingChats: [],
     activeId: null,
     canvasDb: typeof record.canvasDb === "string" ? record.canvasDb : null,
     currentCanvasWorkId: typeof record.currentCanvasWorkId === "string" ? record.currentCanvasWorkId : null,
@@ -159,6 +160,7 @@ export function saveAppState(state: AppState) {
   try {
     const payload: PersistedState = {
       ...state,
+      pendingChats: [],
       conversations: state.conversations.map((conversation) => ({
         ...conversation,
         sseConnected: false,

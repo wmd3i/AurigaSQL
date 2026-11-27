@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { bff, type DemoGroupId, type DataSource, type TaskItem } from "../../api/bff";
 import { useModels } from "../../state/modelContext";
@@ -13,6 +13,7 @@ import { FlowModeSwitch } from "../FlowModeSwitch";
 import type { BranchTarget } from "../canvas/CanvasComposer";
 import type { CanvasToneId } from "../../lib/canvasTones";
 import { PendingChatMain } from "../result/PendingChatMain";
+import { PendingChatsContext } from "../../state/pendingChatsContext";
 
 type SourceMismatch = {
   query: string;
@@ -27,6 +28,7 @@ type SourceMismatch = {
 };
 
 type PendingChat = {
+  id?: string;
   title: string;
   database?: string;
   showChatPreview?: boolean;
@@ -52,7 +54,7 @@ export function HomePage(props: {
     signal?: AbortSignal,
     branchTarget?: BranchTarget | null,
     parentContext?: string,
-    options?: { preserveView?: boolean; canvasTone?: CanvasToneId },
+    options?: { preserveView?: boolean; canvasTone?: CanvasToneId; pendingId?: string },
   ) => Promise<void>;
   onOpenWorkspaceSetup: () => void;
   onOpenCanvas: (source: DataSource | null) => void;
@@ -61,6 +63,7 @@ export function HomePage(props: {
   dataConnectionVersion?: number;
 }) {
   const { selectedId: modelId } = useModels();
+  const { dispatch } = useContext(PendingChatsContext)!;
   const [sources, setSources] = useState<DataSource[]>(() => props.selectedDataSource ? [props.selectedDataSource] : []);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(props.selectedDataSource?.id ?? null);
@@ -138,7 +141,7 @@ export function HomePage(props: {
     signal?: AbortSignal,
     branchTarget?: BranchTarget | null,
     parentContext?: string,
-    options?: { preserveView?: boolean; canvasTone?: CanvasToneId },
+    options?: { preserveView?: boolean; canvasTone?: CanvasToneId; pendingId?: string },
   ) {
     if (!signal?.aborted) setSourceMismatch(null);
     await props.onStart(source, query, mode, signal, branchTarget, parentContext, options);
@@ -146,21 +149,24 @@ export function HomePage(props: {
 
   async function runPendingStart(
     pending: PendingChat,
-    start: (signal: AbortSignal) => Promise<void>,
+    start: (signal: AbortSignal, pendingId: string) => Promise<void>,
   ) {
     if (startControllerRef.current) return;
     const controller = new AbortController();
+    const id = crypto.randomUUID();
     startControllerRef.current = controller;
-    setPendingChat(pending);
+    setPendingChat({ ...pending, id });
+    dispatch({ type: "PENDING_CHAT_STARTED", chat: { id, title: pending.title, database: pending.database, createdAt: Date.now() } });
     setHint(null);
     try {
-      await start(controller.signal);
+      await start(controller.signal, id);
     } catch (error) {
       if (!controller.signal.aborted) setHint(errorMessage(error));
       else if (controller.signal.reason === CHAT_START_NAVIGATION) {
         toast.error(errorMessage(error), { description: pending.title });
       }
     } finally {
+      dispatch({ type: "PENDING_CHAT_FINISHED", id });
       if (startControllerRef.current === controller) {
         startControllerRef.current = null;
         setPendingChat(null);
@@ -170,7 +176,7 @@ export function HomePage(props: {
 
   async function startPendingMismatch(source: DataSource) {
     if (!sourceMismatch) return;
-    await runPendingStart({ title: sourceMismatch.query, database: source.display_name }, async (signal) => {
+    await runPendingStart({ title: sourceMismatch.query, database: source.display_name }, async (signal, pendingId) => {
       await startWithSource(
         source,
         sourceMismatch.query,
@@ -178,7 +184,7 @@ export function HomePage(props: {
         signal,
         sourceMismatch.branchTarget ?? null,
         sourceMismatch.parentContext,
-        { preserveView: sourceMismatch.preserveView, canvasTone: sourceMismatch.canvasTone },
+        { preserveView: sourceMismatch.preserveView, canvasTone: sourceMismatch.canvasTone, pendingId },
       );
       if (!signal.aborted) setSelectedSourceId(source.id);
     });
@@ -230,7 +236,7 @@ export function HomePage(props: {
       database: selectedSource?.display_name,
       showChatPreview: !selectedSource,
     };
-    await runPendingStart(pending, async (signal) => {
+    await runPendingStart(pending, async (signal, pendingId) => {
       const { source, mismatch } = await sourceForQuery(query, signal);
       if (signal.aborted && signal.reason !== CHAT_START_NAVIGATION) return;
       if (mismatch) {
@@ -241,14 +247,16 @@ export function HomePage(props: {
         }
         return;
       }
-      if (!signal.aborted) setPendingChat({ ...pending, database: source.display_name });
-      await startWithSource(source, query, "agent", signal);
+      dispatch({ type: "PENDING_CHAT_DATABASE", id: pendingId, database: source.display_name });
+      if (!signal.aborted) setPendingChat({ ...pending, id: pendingId, database: source.display_name });
+      await startWithSource(source, query, "agent", signal, undefined, undefined, { pendingId });
     });
   }
 
   function handlePauseStart() {
     startControllerRef.current?.abort();
     startControllerRef.current = null;
+    if (pendingChat?.id) dispatch({ type: "PENDING_CHAT_FINISHED", id: pendingChat.id });
     setPendingChat(null);
   }
 

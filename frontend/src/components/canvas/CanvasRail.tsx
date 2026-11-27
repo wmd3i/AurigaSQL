@@ -1,10 +1,11 @@
-import { useMemo } from "react";
-import { Trash2 } from "lucide-react";
+import { useContext, useMemo } from "react";
+import { Loader2, Trash2 } from "lucide-react";
 import { buildHistoryItems } from "../../lib/conversationHistory";
 import { cn } from "../../lib/cn";
 import { inferDataEngine } from "../../lib/databaseEngine";
 import type { Conversation, ConversationStatus } from "../../state/types";
 import { DialectIcon } from "../home/DialectIcon";
+import { PendingChatsContext } from "../../state/pendingChatsContext";
 
 type CanvasWork = {
   id: string;
@@ -69,6 +70,7 @@ export function CanvasRail(props: {
   onSelectThread: (id: string) => void;
   onDeleteThread?: (id: string) => void;
 }) {
+  const pendingChats = useContext(PendingChatsContext)?.chats ?? [];
   const works = useMemo<CanvasWork[]>(() => {
     return buildHistoryItems(props.conversations).map((item) => ({
       id: item.key,
@@ -81,12 +83,12 @@ export function CanvasRail(props: {
   const stats = summarizeThreads(works);
   const activeWork = works.find((work) => work.conversations.some((c) => c.id === props.activeId)) ?? null;
   const headline = useMemo(() => {
-    if (stats.running > 0) return `${stats.running} running`;
+    if (stats.running + pendingChats.length > 0) return `${stats.running + pendingChats.length} running`;
     if (stats.waiting > 0) return `${stats.waiting} needs input`;
     if (stats.done > 0) return `${stats.done} done`;
     if (stats.error > 0) return `${stats.error} errors`;
     return `${stats.total} threads`;
-  }, [stats.done, stats.error, stats.running, stats.total, stats.waiting]);
+  }, [pendingChats.length, stats.done, stats.error, stats.running, stats.total, stats.waiting]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -105,7 +107,16 @@ export function CanvasRail(props: {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <section>
           <div className="flex flex-col gap-2">
-            {works.length === 0 && <p className="px-1 text-[12px] text-faint">No threads yet.</p>}
+            {pendingChats.map((pending) => (
+              <div key={pending.id} role="status" className="rounded-2xl px-3 py-3">
+                <div className="flex items-center gap-2.5 text-[13px] text-ink">
+                  <Loader2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-accent motion-safe:animate-spin" />
+                  <span className="truncate">{pending.title}</span>
+                </div>
+                <p className="mt-1 truncate text-[11px] text-faint">{pending.database ?? "Choosing a database…"}</p>
+              </div>
+            ))}
+            {works.length === 0 && pendingChats.length === 0 && <p className="px-1 text-[12px] text-faint">No threads yet.</p>}
             {works.map((work) => {
               const c = work.primary;
               const active = work.conversations.some((conversation) => conversation.id === props.activeId);

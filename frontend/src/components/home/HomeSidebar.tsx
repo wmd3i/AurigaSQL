@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Database, Loader2, PanelLeft, PanelLeftClose, Settings2, SquarePen, Trash2 } from "lucide-react";
 import type { DataSource } from "../../api/bff";
 import type { Conversation } from "../../state/types";
@@ -9,10 +9,11 @@ import { ResizeHandle } from "../ResizeHandle";
 import { cn } from "../../lib/cn";
 import { useOpenSettings } from "../../state/settingsContext";
 import { inferDataEngine } from "../../lib/databaseEngine";
+import { PendingChatsContext } from "../../state/pendingChatsContext";
 
 const SIDEBAR_BG = "app-shell-bg";
 type SidebarSection = "chat" | "workspace";
-type PendingChat = { title: string; database?: string };
+type PendingChat = { id?: string; title: string; database?: string };
 
 function HistoryTitle({ title, selected, running }: { title: string; selected: boolean; running: boolean }) {
   return (
@@ -46,6 +47,8 @@ export function HomeSidebar(props: {
   onOpenLlmConfig?: () => void;
 }) {
   const openSettings = useOpenSettings();
+  const pendingState = useContext(PendingChatsContext);
+  const pendingChats = pendingState?.chats ?? (props.pendingChat ? [{ ...props.pendingChat, id: "pending" }] : []);
   const [collapsed, setCollapsed] = useState(false);
   const { width, dragging, onPointerDown } = useResizable({
     initial: 288,
@@ -175,19 +178,20 @@ export function HomeSidebar(props: {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mb-2 px-2 text-[16px] font-semibold text-muted">History</div>
-        {props.pendingChat && (
+        {pendingChats.map((pending) => (
           <div
-            className={cn("rounded-xl bg-accent-soft px-3 py-2.5", props.onDeleteConversation && "pr-12")}
+            key={pending.id}
+            className={cn("rounded-xl px-3 py-2.5", pending.id === props.pendingChat?.id && "bg-accent-soft", props.onDeleteConversation && "pr-12")}
             role="status"
           >
-            <HistoryTitle title={props.pendingChat.title} selected running />
+            <HistoryTitle title={pending.title} selected={pending.id === props.pendingChat?.id} running />
             <div className="mt-1 flex items-center gap-1.5 text-[12px] text-accent/75">
               <Database aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{props.pendingChat.database ?? "Choosing a database…"}</span>
+              <span className="truncate">{pending.database ?? "Choosing a database…"}</span>
             </div>
           </div>
-        )}
-        {!props.pendingChat && recentItems.length === 0 && (
+        ))}
+        {pendingChats.length === 0 && recentItems.length === 0 && (
           <p className="px-2 text-[12px] text-faint">No conversations yet.</p>
         )}
         {recentItems.map((item) => {

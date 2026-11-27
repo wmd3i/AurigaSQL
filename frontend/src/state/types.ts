@@ -40,8 +40,16 @@ export type Conversation = {
 export type View = "home" | "workspace_setup" | "result" | "canvas";
 export type CanvasScope = "all" | "active";
 
+export type PendingHistoryChat = {
+  id: string;
+  title: string;
+  database?: string;
+  createdAt: number;
+};
+
 export type AppState = {
   view: View;
+  pendingChats: PendingHistoryChat[];
   conversations: Conversation[]; // newest first — this IS the History list
   activeId: string | null;
   canvasDb: string | null;      // canvas-level database (first thread's choice; per-root pickers are a future UI change)
@@ -54,6 +62,7 @@ export type AppState = {
 export const initialState: AppState = {
   view: "home",
   conversations: [],
+  pendingChats: [],
   activeId: null,
   canvasDb: null,
   currentCanvasWorkId: null,
@@ -63,6 +72,9 @@ export const initialState: AppState = {
 };
 
 export type Action =
+  | { type: "PENDING_CHAT_STARTED"; chat: PendingHistoryChat }
+  | { type: "PENDING_CHAT_DATABASE"; id: string; database: string }
+  | { type: "PENDING_CHAT_FINISHED"; id: string }
   | {
       type: "CONVERSATION_STARTED";
       id: string;
@@ -80,6 +92,7 @@ export type Action =
       canvasScope?: CanvasScope;
       preserveView?: boolean;
       background?: boolean;
+      pendingId?: string;
     }
   | {
       type: "LOCAL_BRANCH_STARTED";
