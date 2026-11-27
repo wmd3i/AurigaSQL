@@ -61,8 +61,9 @@ export function HomePage(props: {
   const [hint, setHint] = useState<string | null>(null);
   const [sourceMismatch, setSourceMismatch] = useState<SourceMismatch | null>(null);
   const [highlight, setHighlight] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [pendingChat, setPendingChat] = useState<{ title: string; database?: string } | null>(null);
   const startControllerRef = useRef<AbortController | null>(null);
+  const busy = pendingChat !== null;
   const selectedSource = sources.find((source) => source.id === selectedSourceId && source.ready) ?? null;
   const activeConversation = props.conversations.find((conversation) => conversation.id === props.activeId) ?? null;
   const connectedSourceIds = new Set(sources.filter((source) => source.ready).map((source) => source.id));
@@ -127,26 +128,42 @@ export function HomePage(props: {
     await props.onStart(source, query, mode, signal, branchTarget, parentContext, options);
   }
 
-  async function startPendingMismatch(source: DataSource) {
-    if (!sourceMismatch || busy) return;
-    setBusy(true);
+  async function runPendingStart(
+    title: string,
+    database: string | undefined,
+    start: (signal: AbortSignal) => Promise<void>,
+  ) {
+    if (startControllerRef.current) return;
+    const controller = new AbortController();
+    startControllerRef.current = controller;
+    setPendingChat({ title, database });
     setHint(null);
     try {
+      await start(controller.signal);
+    } catch (error) {
+      if (!controller.signal.aborted) setHint(errorMessage(error));
+    } finally {
+      if (startControllerRef.current === controller) {
+        startControllerRef.current = null;
+        setPendingChat(null);
+      }
+    }
+  }
+
+  async function startPendingMismatch(source: DataSource) {
+    if (!sourceMismatch) return;
+    await runPendingStart(sourceMismatch.query, source.display_name, async (signal) => {
       await startWithSource(
         source,
         sourceMismatch.query,
         sourceMismatch.mode,
-        undefined,
+        signal,
         sourceMismatch.branchTarget ?? null,
         sourceMismatch.parentContext,
         { preserveView: sourceMismatch.preserveView, canvasTone: sourceMismatch.canvasTone },
       );
-      setSelectedSourceId(source.id);
-    } catch (error) {
-      setHint(errorMessage(error));
-    } finally {
-      setBusy(false);
-    }
+      if (!signal.aborted) setSelectedSourceId(source.id);
+    });
   }
 
   function selectAutoSource() {
@@ -185,32 +202,22 @@ export function HomePage(props: {
       return;
     }
 
-    setBusy(true);
-    setHint(null);
-    const controller = new AbortController();
-    startControllerRef.current = controller;
-    try {
+    await runPendingStart(query, selectedSource?.display_name, async (signal) => {
       const { source, mismatch } = await sourceForQuery(query);
+      if (signal.aborted) return;
       if (mismatch) {
         setSourceMismatch(mismatch);
         return;
       }
-      await startWithSource(source, query, "agent", controller.signal);
-    } catch (e) {
-      if (controller.signal.aborted) return;
-      setHint(errorMessage(e));
-    } finally {
-      if (startControllerRef.current === controller) {
-        startControllerRef.current = null;
-        setBusy(false);
-      }
-    }
+      setPendingChat({ title: query, database: source.display_name });
+      await startWithSource(source, query, "agent", signal);
+    });
   }
 
   function handlePauseStart() {
     startControllerRef.current?.abort();
     startControllerRef.current = null;
-    setBusy(false);
+    setPendingChat(null);
   }
 
   async function handleDeleteConnection(source: DataSource) {
@@ -244,6 +251,7 @@ export function HomePage(props: {
     <div className="app-shell-bg flex h-screen w-screen overflow-hidden text-ink">
       <HomeSidebar
         conversations={props.conversations}
+        pendingChat={pendingChat}
         activeSection="chat"
         activeConversationId={props.activeId}
         onNewFlow={props.onNewFlow}

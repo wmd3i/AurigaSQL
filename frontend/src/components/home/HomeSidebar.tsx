@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Database, PanelLeft, PanelLeftClose, Settings2, SquarePen, Trash2 } from "lucide-react";
+import { Database, Loader2, PanelLeft, PanelLeftClose, Settings2, SquarePen, Trash2 } from "lucide-react";
 import type { DataSource } from "../../api/bff";
 import type { Conversation } from "../../state/types";
 import { buildHistoryItems } from "../../lib/conversationHistory";
@@ -12,8 +12,27 @@ import { inferDataEngine } from "../../lib/databaseEngine";
 
 const SIDEBAR_BG = "app-shell-bg";
 type SidebarSection = "chat" | "workspace";
+type PendingChat = { title: string; database?: string };
+
+function HistoryTitle({ title, selected, running }: { title: string; selected: boolean; running: boolean }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span className={cn("min-w-0 flex-1 truncate text-[14.5px]", selected ? "text-accent" : "text-ink")}>
+        {title}
+      </span>
+      {running && (
+        <span className="shrink-0 text-accent" title="Working">
+          <Loader2 aria-hidden="true" className="h-3.5 w-3.5 motion-safe:animate-spin" />
+          <span className="sr-only">Working</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function HomeSidebar(props: {
   conversations: Conversation[];
+  pendingChat?: PendingChat | null;
   onNewFlow: () => void;
   onOpen: (id: string) => void;
   onOpenWorkspaceSetup: () => void;
@@ -156,12 +175,25 @@ export function HomeSidebar(props: {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mb-2 px-2 text-[16px] font-semibold text-muted">History</div>
-        {recentItems.length === 0 && (
+        {props.pendingChat && (
+          <div
+            className={cn("rounded-xl bg-accent-soft px-3 py-2.5", props.onDeleteConversation && "pr-12")}
+            role="status"
+          >
+            <HistoryTitle title={props.pendingChat.title} selected running />
+            <div className="mt-1 flex items-center gap-1.5 text-[12px] text-accent/75">
+              <Database aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{props.pendingChat.database ?? "Choosing a database…"}</span>
+            </div>
+          </div>
+        )}
+        {!props.pendingChat && recentItems.length === 0 && (
           <p className="px-2 text-[12px] text-faint">No conversations yet.</p>
         )}
         {recentItems.map((item) => {
           const c = item.primary;
-          const selected = item.conversations.some((conversation) => conversation.id === props.activeConversationId);
+          const selected = !props.pendingChat && item.conversations.some((conversation) => conversation.id === props.activeConversationId);
+          const running = item.conversations.some(({ status }) => status === "starting" || status === "active");
           return (
             <div
               key={item.key}
@@ -174,9 +206,7 @@ export function HomeSidebar(props: {
                 onClick={() => props.onOpen(item.latest.id)}
                 className="min-w-0 flex-1 text-left"
               >
-                <span className={cn("block w-full truncate text-[14.5px]", selected ? "text-accent" : "text-ink")}>
-                  {c.summary ?? c.title}
-                </span>
+                <HistoryTitle title={c.summary ?? c.title} selected={selected} running={running} />
                 <div className={cn("mt-1 flex items-center gap-1.5 text-[12px]", selected ? "text-accent/75" : "text-faint")}>
                   <DialectIcon dialect={c.source?.engine ?? inferDataEngine(c.database)} className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">
