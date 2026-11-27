@@ -9,6 +9,7 @@ import { DataConnectionModal } from "./components/home/DataConnectionModal";
 import { reducer } from "./state/reducer";
 import { initialState, type QueryMode } from "./state/types";
 import { useChat } from "./state/useChat";
+import { useCompletionNotifications } from "./state/useCompletionNotifications";
 import { bff, type DemoGroupId, type DataSource, type ModelInfo } from "./api/bff";
 import { ModelContext } from "./state/modelContext";
 import { loadAppState, saveAppState } from "./state/persistence";
@@ -247,6 +248,22 @@ export default function App() {
     setCanvasSourceMismatch(null);
     dispatch({ type: "OPEN_CONVERSATION", id, view });
   };
+
+  // Toast (and optional desktop notification) when a chat you're not looking at finishes.
+  useCompletionNotifications(
+    state.conversations,
+    (conversation) => {
+      if (state.view === "result") return conversation.id === state.activeId;
+      if (state.view === "canvas") {
+        return (
+          conversation.id === state.activeId ||
+          conversationWorkId(state.conversations, conversation) === state.currentCanvasWorkId
+        );
+      }
+      return false;
+    },
+    (conversation) => openConversation(conversation.id, conversation.mode === "workspace" ? "canvas" : "result"),
+  );
 
   const clearCanvasTransitionTimer = () => {
     if (canvasTransitionTimeoutRef.current !== null) {

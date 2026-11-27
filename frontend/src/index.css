@@ -288,3 +288,17 @@ body {
 .react-flow__node-planLoading.dragging {
   transition: none;
 }
+
+/* Toasts (sonner) follow the app theme instead of sonner's own light palette. */
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-description] {
+  color: var(--muted);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-button] {
+  background: var(--invert);
+  color: var(--invert-ink);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-close-button] {
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--line);
+}

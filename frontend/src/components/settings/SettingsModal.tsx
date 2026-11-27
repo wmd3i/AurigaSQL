@@ -27,6 +27,11 @@ import {
   type AccentColor,
   type ThemePreference,
 } from "../../lib/theme";
+import {
+  desktopNotificationsSupported,
+  getDesktopNotifications,
+  setDesktopNotifications,
+} from "../../lib/notifications";
 import { LlmConfigModal, type EmbeddedHeader } from "./LlmConfigModal";
 
 // Keep in sync with frontend/package.json "version".
@@ -135,6 +140,18 @@ function GeneralTab() {
   const [theme, setTheme] = useState<ThemePreference>(getThemePreference);
   const [accent, setAccentState] = useState<AccentColor>(getAccent);
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [desktopNotify, setDesktopNotify] = useState(getDesktopNotifications);
+  const notifySupported = desktopNotificationsSupported();
+
+  async function toggleDesktopNotify() {
+    const next = await setDesktopNotifications(!desktopNotify);
+    setDesktopNotify(next);
+    if (!desktopNotify && !next) {
+      toast.error("Notifications are blocked for this site. Allow them in your browser settings, then try again.", {
+        id: "desktop-notify-blocked",
+      });
+    }
+  }
 
   return (
     <div className="space-y-7">
@@ -225,6 +242,41 @@ function GeneralTab() {
               );
             })}
           </div>
+        </div>
+      </Section>
+
+      <Section
+        title="Notifications"
+        description="When a chat you're not viewing finishes, you'll see a pop-up in the app."
+      >
+        <div className="flex items-center gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13.5px] font-medium text-ink">Desktop notifications</div>
+            <div className="mt-0.5 text-[12.5px] leading-5 text-muted">
+              {notifySupported
+                ? "Also notify you when AurigaSQL is in the background."
+                : "This browser doesn't support desktop notifications."}
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={desktopNotify}
+            aria-label="Desktop notifications"
+            disabled={!notifySupported}
+            onClick={() => void toggleDesktopNotify()}
+            className={cn(
+              "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition disabled:opacity-40",
+              desktopNotify ? "bg-accent" : "bg-line",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-block h-5 w-5 rounded-full shadow-sm transition-transform",
+                desktopNotify ? "translate-x-[18px] bg-accent-ink" : "translate-x-0.5 bg-white",
+              )}
+            />
+          </button>
         </div>
       </Section>
 
