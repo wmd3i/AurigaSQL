@@ -207,7 +207,7 @@ export default function App() {
             conversation.status === "active" ||
             conversation.status === "waiting_user"),
       )
-      .forEach((conversation) => chat.subscribe(conversation.id));
+      .forEach((conversation) => chat.subscribe(conversation.id, conversation.rawEvents.length - 1));
   }, [chat.subscribe, state.conversations]);
 
   const activeConversation = state.conversations.find((c) => c.id === state.activeId) ?? null;
@@ -354,7 +354,9 @@ export default function App() {
         onOpenWorkspaceSetup={openWorkspaceSetup}
         onAnswer={chat.answerPending}
         onFollowUp={(_database, query) =>
-          Promise.resolve(chat.sendMessage(activeConversation.id, query, modelId))
+          Promise.resolve(
+            chat.sendMessage(activeConversation.id, query, modelId, activeConversation.rawEvents.length - 1),
+          )
         }
         onStop={chat.cancel}
         onOpenLlmConfig={() => openSettings("models")}

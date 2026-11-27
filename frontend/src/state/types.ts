@@ -109,6 +109,7 @@ export type Action =
   | { type: "SET_SUMMARY"; id: string; summary: string }
   | { type: "ANSWER_SENT"; id: string }
   | { type: "CONV_ERROR"; id: string; message: string }
+  | { type: "SESSION_NOT_FOUND"; id: string; message: string }
   | { type: "DELETE_CONVERSATION"; id: string }
   | { type: "REVERT_CONVERSATION_TO_NODE"; id: string; nodeId: string }
   | { type: "NEW_FLOW" }

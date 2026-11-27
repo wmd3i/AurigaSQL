@@ -47,8 +47,8 @@ export class EventSocket {
     private readonly createSocket: (url: string) => WebSocket = (u) => new WebSocket(u),
   ) {}
 
-  subscribe(taskId: string, callbacks: TaskStreamCallbacks): EventStreamHandle {
-    const sub: Subscription = { ...callbacks, lastIndex: -1 };
+  subscribe(taskId: string, callbacks: TaskStreamCallbacks, after = -1): EventStreamHandle {
+    const sub: Subscription = { ...callbacks, lastIndex: after };
     this.subs.set(taskId, sub);
     if (this.ws?.readyState === OPEN) {
       this.send({ op: "subscribe", task_id: taskId, after: sub.lastIndex });
@@ -71,13 +71,16 @@ export class EventSocket {
     const ws = this.createSocket(this.url);
     this.ws = ws;
     ws.onopen = () => {
+      if (this.ws !== ws) return;
       this.retries = 0;
       for (const [taskId, sub] of this.subs) {
         this.send({ op: "subscribe", task_id: taskId, after: sub.lastIndex });
         sub.onConnect?.();
       }
     };
-    ws.onmessage = (e) => this.handle(e.data);
+    ws.onmessage = (e) => {
+      if (this.ws === ws) this.handle(e.data);
+    };
     ws.onclose = () => {
       if (this.ws !== ws) return;
       this.ws = null;
@@ -136,7 +139,7 @@ export class EventSocket {
 let shared: EventSocket | null = null;
 
 /** Subscribe to one task's events over the tab's shared socket. */
-export function openTaskStream(taskId: string, callbacks: TaskStreamCallbacks): EventStreamHandle {
+export function openTaskStream(taskId: string, callbacks: TaskStreamCallbacks, after = -1): EventStreamHandle {
   shared ??= new EventSocket(eventSocketUrl());
-  return shared.subscribe(taskId, callbacks);
+  return shared.subscribe(taskId, callbacks, after);
 }
