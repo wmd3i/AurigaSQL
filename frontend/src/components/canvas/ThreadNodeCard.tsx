@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import {
   ArrowUp,
   BookOpenText,
+  Check,
   ChevronDown,
   ChevronRight,
   Columns3,
@@ -25,6 +26,8 @@ import { getCanvasTone, type CanvasToneId } from "../../lib/canvasTones";
 import { DetailBlock, SqlCodeBlock } from "../result/ProcessTimeline";
 import { useSelectedModelLabel } from "../../state/modelContext";
 import { cardLabel, toolActionLabel, toolGroupButtonLabel } from "./cardKind";
+import { isRunSqlTool, isSqlInputTool, isValidationTool } from "../../lib/toolLabels";
+import { cardCopyPayload, writeCopyPayload, type CopyableCard } from "../../lib/cardCopy";
 import { ToolResultView } from "./ToolPresentation";
 
 /** Real action nodes come from buildNodes; "working" (ghost while the agent
@@ -261,42 +264,6 @@ function hasInlineToolDetails(tool: ThreadNode) {
   return tool.title !== "get_knowledge_definition";
 }
 
-function isRunSqlTool(name?: string) {
-  return (
-    name === "execute_sql" ||
-    name === "run_sqlite_readonly" ||
-    name === "run_duckdb_readonly" ||
-    name === "run_postgres_readonly" ||
-    name === "run_mysql_readonly"
-  );
-}
-
-function isSqlInputTool(name?: string) {
-  return (
-    isRunSqlTool(name) ||
-    name === "explain_sqlite_query" ||
-    name === "explain_postgres_query" ||
-    name === "explain_mysql_query" ||
-    name === "validate_sql" ||
-    name === "validate_sqlite_query" ||
-    name === "validate_duckdb_query" ||
-    name === "validate_postgres_query" ||
-    name === "validate_mysql_query" ||
-    name === "submit_sql" ||
-    name === "submit"
-  );
-}
-
-function isValidationTool(name?: string) {
-  return (
-    name === "validate_sql" ||
-    name === "validate_sqlite_query" ||
-    name === "validate_duckdb_query" ||
-    name === "validate_postgres_query" ||
-    name === "validate_mysql_query"
-  );
-}
-
 function ValidationStatusCard({ result }: { result?: string }) {
   let ok: boolean | null = null;
   if (result) {
@@ -318,6 +285,54 @@ function ValidationStatusCard({ result }: { result?: string }) {
         </span>
       )}
     </div>
+  );
+}
+
+/** Icon-only copy button that sits left of a card's label (or of a tool row
+ *  inside a tool group). Copies just that card's content. */
+function CardCopyButton(props: { card: CopyableCard; compact?: boolean; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  const resetRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (resetRef.current !== null) window.clearTimeout(resetRef.current);
+    },
+    [],
+  );
+
+  async function copy() {
+    const payload = cardCopyPayload(props.card);
+    if (!payload) return;
+    try {
+      await writeCopyPayload(payload);
+      setCopied(true);
+      if (resetRef.current !== null) window.clearTimeout(resetRef.current);
+      resetRef.current = window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  const Icon = copied ? Check : Copy;
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        void copy();
+      }}
+      onDoubleClick={(event) => event.stopPropagation()}
+      className={cn(
+        "nodrag nopan -my-1 -ml-1 flex shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-ink/10 hover:text-ink",
+        props.compact ? "h-5 w-5" : "h-[22px] w-[22px]",
+        props.className,
+      )}
+      aria-label={copied ? "Copied" : "Copy card content"}
+      title={copied ? "Copied" : "Copy"}
+    >
+      <Icon className="h-3 w-3" />
+    </button>
   );
 }
 
@@ -486,6 +501,8 @@ function ToolGroupCard(props: {
                   data-tool-card-id={tool.id}
                   className="nodrag nopan group/tool relative z-10 overflow-visible rounded-2xl border border-dashed border-accent/30 bg-card/40 transition-colors hover:border-accent/50 hover:bg-card/70"
                 >
+                  <div className="flex items-center pl-3">
+                  <CardCopyButton card={tool} />
                   <button
                     type="button"
                     onClick={(event) => {
@@ -500,7 +517,7 @@ function ToolGroupCard(props: {
                       setExpandedToolId(hasInlineToolDetails(tool) ? tool.id : null);
                       props.onInspectTool?.(tool, true);
                     }}
-                    className="flex w-full items-center justify-between gap-3 px-3.5 text-left"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-3 pl-1.5 pr-3.5 text-left"
                     title="Click for details · Double-click to open in the inspector"
                     style={{ height: itemHeight }}
                   >
@@ -510,6 +527,7 @@ function ToolGroupCard(props: {
                       </span>
                     </div>
                   </button>
+                  </div>
                   {expandedToolId === tool.id && <ToolInlineDetails tool={tool} />}
                   {props.onBranchTool && (
                     <button
@@ -605,7 +623,6 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
   const { tn, pulse, footer, onHeightChange, onBranchTool, onAnswer, onInspectTool, onCreateBranchDraft, onRevert, branchOrigin, compact } = data;
   const modelLabel = useSelectedModelLabel();
   const [detailsOpen, setDetailsOpen] = useState(false); // fold level 1
-  const [copied, setCopied] = useState(false);
   const [answerDraft, setAnswerDraft] = useState("");
   const [answerSubmitting, setAnswerSubmitting] = useState(false);
   const answerPendingRef = useRef(false);
@@ -674,25 +691,6 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
       await restartBackend();
     } finally {
       window.location.reload();
-    }
-  }
-
-  async function copyCardContent() {
-    const parts: string[] = [];
-    if ("body" in tn && tn.body) parts.push(tn.body);
-    if ("result" in tn && tn.result) parts.push(tn.result);
-    if (tn.kind === "tool_group") {
-      tn.tools.forEach((tool) => {
-        parts.push([cardLabel(tool), tool.body, tool.result].filter(Boolean).join("\n"));
-      });
-    }
-    const text = parts.join("\n\n").trim() || cardLabel(tn);
-    try {
-      await navigator.clipboard?.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1400);
-    } catch {
-      setCopied(false);
     }
   }
 
@@ -786,7 +784,10 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
       <div ref={rootRef} className="relative">
         <Handle type="target" position={Position.Top} className="!h-1 !w-1 !border-0 !bg-transparent" />
         <div className="w-[320px] rounded-2xl border border-danger bg-danger-soft px-4 py-3 shadow-sm">
-          <div className="mb-1 text-[11px] font-medium text-danger">Error</div>
+          <div className="mb-1 flex items-center gap-1">
+            <CardCopyButton card={tn} compact={compact} />
+            <span className="text-[11px] font-medium text-danger">Error</span>
+          </div>
           <pre className={cn(scrollSurfaceClass, "max-h-[180px] whitespace-pre font-sans text-[13px] leading-snug text-danger")}>
             {tn.body}
           </pre>
@@ -805,7 +806,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
         className="!h-1 !w-1 !border-0 !bg-transparent"
       />
 
-      {selected && (
+      {selected && ((branchable && onCreateBranchDraft) || onRevert) && (
         <div
           className={cn(
             "nodrag nopan absolute left-1/2 top-0 z-30 flex -translate-x-1/2 items-center border border-line/80 bg-card/95 font-semibold text-ink shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur",
@@ -815,18 +816,6 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={() => void copyCardContent()}
-            className={cn(
-              "flex items-center rounded-full transition-colors hover:bg-hover",
-              compact ? "h-6 gap-1 px-1" : "h-[28px] gap-1 px-1.5",
-            )}
-            aria-label="Copy content"
-          >
-            <Copy className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-            <span>{copied ? "Copied" : "Copy"}</span>
-          </button>
           {branchable && onCreateBranchDraft && (
             <button
               type="button"
@@ -906,17 +895,20 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
         ) : foldable ? (
           <>
             {/* fold level 0: name only */}
-            <button
-              onClick={() => setDetailsOpen(!detailsOpen)}
-              className="flex w-full items-center justify-between gap-2 text-left"
-            >
-              <span className={cn("text-[11px] font-medium", isTool ? "text-accent" : "text-muted")}>
-                {isTool ? cardLabel(tn) : "Thinking"}
-              </span>
-              <ChevronDown
-                className={cn("h-3.5 w-3.5 text-faint transition-transform", detailsOpen && "rotate-180")}
-              />
-            </button>
+            <div className="flex w-full items-center gap-1">
+              <CardCopyButton card={tn} compact={compact} />
+              <button
+                onClick={() => setDetailsOpen(!detailsOpen)}
+                className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+              >
+                <span className={cn("text-[11px] font-medium", isTool ? "text-accent" : "text-muted")}>
+                  {isTool ? cardLabel(tn) : "Thinking"}
+                </span>
+                <ChevronDown
+                  className={cn("h-3.5 w-3.5 text-faint transition-transform", detailsOpen && "rotate-180")}
+                />
+              </button>
+            </div>
 
             {detailsOpen && (
               <div className="mt-2">
@@ -959,8 +951,11 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
           <>
             {tn.kind === "question" && (
               <div className="mb-1">
-                <div className="text-[11px] font-medium text-accent">
-                  {branchOrigin ? (branchOrigin.kind === "fork" ? "Fork" : "Follow-up") : "You asked"}
+                <div className="flex items-center gap-1">
+                  <CardCopyButton card={tn} compact={compact} />
+                  <span className="text-[11px] font-medium text-accent">
+                    {branchOrigin ? (branchOrigin.kind === "fork" ? "Fork" : "Follow-up") : "You asked"}
+                  </span>
                 </div>
                 {branchOrigin && (
                   <div className="mt-0.5 truncate text-[10.5px] font-medium text-faint">
@@ -969,10 +964,18 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
                 )}
               </div>
             )}
-            {isAnswer && <div className="mb-1 text-[11px] font-medium text-accent">Final Result</div>}
+            {isAnswer && (
+              <div className="mb-1 flex items-center gap-1">
+                <CardCopyButton card={tn} compact={compact} />
+                <span className="text-[11px] font-medium text-accent">Final Result</span>
+              </div>
+            )}
             {tn.kind === "agent_question" && (
-              <div className="mb-1 text-[11px] font-medium text-accent">
-                AurigaSQL asks{pulse && " — waiting for your answer"}
+              <div className="mb-1 flex items-center gap-1">
+                <CardCopyButton card={tn} compact={compact} />
+                <span className="text-[11px] font-medium text-accent">
+                  AurigaSQL asks{pulse && " — waiting for your answer"}
+                </span>
               </div>
             )}
 
@@ -1022,6 +1025,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
 
             {tn.kind !== "agent_question" && tn.kind !== "question" && !isAnswer && (
               <div className="mt-2 flex items-center gap-1 text-[11px] text-faint">
+                <CardCopyButton card={tn} compact={compact} />
                 {tn.kind === "agent_text" && <Sparkles className="h-3 w-3 text-accent" />}
                 {isMe ? "Me" : isAnswer ? "✓ Final result" : modelLabel}
               </div>

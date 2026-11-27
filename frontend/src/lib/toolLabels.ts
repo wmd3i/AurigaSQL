@@ -71,3 +71,39 @@ export function humanizeToolName(toolName?: string | null): string {
 
   return humanizeToolSubject(toolName);
 }
+
+export function isRunSqlTool(name?: string) {
+  return (
+    name === "execute_sql" ||
+    name === "run_sqlite_readonly" ||
+    name === "run_duckdb_readonly" ||
+    name === "run_postgres_readonly" ||
+    name === "run_mysql_readonly"
+  );
+}
+
+export function isSqlInputTool(name?: string) {
+  return (
+    isRunSqlTool(name) ||
+    name === "explain_sqlite_query" ||
+    name === "explain_postgres_query" ||
+    name === "explain_mysql_query" ||
+    name === "validate_sql" ||
+    name === "validate_sqlite_query" ||
+    name === "validate_duckdb_query" ||
+    name === "validate_postgres_query" ||
+    name === "validate_mysql_query" ||
+    name === "submit_sql" ||
+    name === "submit"
+  );
+}
+
+export function isValidationTool(name?: string) {
+  return (
+    name === "validate_sql" ||
+    name === "validate_sqlite_query" ||
+    name === "validate_duckdb_query" ||
+    name === "validate_postgres_query" ||
+    name === "validate_mysql_query"
+  );
+}
