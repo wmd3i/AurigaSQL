@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { bff, type DemoGroupId, type DataSource, type TaskItem } from "../../api/bff";
 import { useModels } from "../../state/modelContext";
-import type { Conversation } from "../../state/types";
+import { CHAT_START_NAVIGATION, type Conversation } from "../../state/types";
 import { HomeSidebar } from "./HomeSidebar";
 import { HomeHero } from "./HomeHero";
 import { HomeComposer } from "./HomeComposer";
@@ -190,7 +190,7 @@ export function HomePage(props: {
   }, []);
 
   useEffect(() => () => {
-    startControllerRef.current?.abort();
+    startControllerRef.current?.abort(CHAT_START_NAVIGATION);
     startControllerRef.current = null;
   }, []);
 
