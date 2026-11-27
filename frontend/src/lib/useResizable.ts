@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Options = {
   /** Initial width in px. */
@@ -8,14 +8,34 @@ type Options = {
   /** Which edge hosts the drag handle. "right" grows when dragging right
    *  (left sidebar); "left" grows when dragging left (right sidebar). */
   edge: "left" | "right";
+  storageKey?: string;
 };
 
 /** Drag-to-resize for a panel. Returns the live width plus the props to spread
  *  onto a thin handle element on the panel's edge. */
-export function useResizable({ initial, min, max, edge }: Options) {
-  const [width, setWidth] = useState(initial);
+export function useResizable({ initial, min, max, edge, storageKey }: Options) {
+  const [width, setWidth] = useState(() => {
+    if (!storageKey || typeof window === "undefined") return initial;
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (saved === null || saved.trim() === "") return initial;
+      const parsed = Number(saved);
+      return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : initial;
+    } catch {
+      return initial;
+    }
+  });
   const [dragging, setDragging] = useState(false);
   const frame = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      window.localStorage.setItem(storageKey, String(width));
+    } catch {
+      // The panel can still resize when browser storage is unavailable.
+    }
+  }, [storageKey, width]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {

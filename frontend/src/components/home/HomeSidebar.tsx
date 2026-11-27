@@ -55,6 +55,7 @@ export function HomeSidebar(props: {
     min: 220,
     max: 480,
     edge: "right",
+    storageKey: "aurigasql-history-sidebar-width",
   });
   const readySources = (props.dataSources ?? []).filter((source) => source.ready);
   const activeConversation = props.conversations.find((conversation) => conversation.id === props.activeConversationId) ?? null;
