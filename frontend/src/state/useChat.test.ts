@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { bff } from "../api/bff";
+import { bff, type DataSource } from "../api/bff";
 import { reducer } from "./reducer";
-import { initialState } from "./types";
+import { CHAT_START_NAVIGATION, initialState } from "./types";
 import { useChat } from "./useChat";
 
 vi.mock("react", () => ({
@@ -14,6 +14,8 @@ vi.mock("../api/bff", () => ({
     cleanup: vi.fn(),
     session: vi.fn(),
     turn: vi.fn(),
+    startFreechat: vi.fn(),
+    summaryTitle: vi.fn(),
   },
 }));
 vi.mock("../api/client", () => ({ BFF_BASE: "http://127.0.0.1:6003" }));
@@ -79,12 +81,14 @@ function reconnect() {
 
 beforeEach(() => {
   sockets = [];
+  dispose = () => {};
   vi.useFakeTimers();
   vi.stubGlobal("WebSocket", FakeSocket);
   vi.mocked(bff.session).mockImplementation(() => new Promise(() => {}));
   vi.mocked(bff.turn).mockImplementation(() => new Promise(() => {}));
   vi.mocked(bff.cancel).mockImplementation(() => Promise.resolve({ status: "ok" }));
   vi.mocked(bff.cleanup).mockImplementation(() => Promise.resolve({ status: "ok" }));
+  vi.mocked(bff.summaryTitle).mockResolvedValue({ title: "" });
 });
 
 afterEach(() => {
@@ -92,6 +96,71 @@ afterEach(() => {
   vi.resetAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+const source: DataSource = {
+  id: "credit", source_group: "demo", engine: "sqlite", display_name: "Credit",
+  ready: true, source_type: "demo", database: "credit", db_path: null,
+  schema_path: null, connection_id: null, description: "", reason: "",
+};
+
+describe("chat startup", () => {
+  function pendingStart() {
+    let finish!: (started: Awaited<ReturnType<typeof bff.startFreechat>>) => void;
+    vi.mocked(bff.startFreechat).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    return () => finish({
+      task_id: "new", mode: "free-chat", source, database: "credit",
+      databases: ["credit"], user_query: "Compare credit",
+    });
+  }
+
+  it("keeps the new chat running in History when navigation happens during creation", async () => {
+    let state = reducer(initialState, {
+      type: "CONVERSATION_STARTED", id: "history", database: "db", databases: ["db"],
+      title: "History entry", mode: "agent", createdAt: 1,
+    });
+    const previous = state;
+    const chat = useChat((action) => { state = reducer(state, action); });
+    const finish = pendingStart();
+    const controller = new AbortController();
+    const startup = chat.startConversation(source, "Compare credit", "agent", null, null, undefined, controller.signal);
+    controller.abort(CHAT_START_NAVIGATION);
+    finish();
+    await startup;
+    dispose = () => chat.clearConversations(["new"]);
+
+    expect(state.conversations.map((conversation) => conversation.id)).toEqual(["new", "history"]);
+    expect({ ...state, conversations: [] }).toEqual({ ...previous, conversations: [] });
+    expect(bff.turn).toHaveBeenCalledWith("new", "Compare credit", "a-interact", null);
+    expect(bff.cleanup).not.toHaveBeenCalled();
+    expect(bff.startFreechat).toHaveBeenCalledWith(source.id, "Compare credit", null, null);
+  });
+
+  it("cleans up a created session when the user explicitly cancels startup", async () => {
+    const dispatch = vi.fn();
+    const chat = useChat(dispatch);
+    const finish = pendingStart();
+    const controller = new AbortController();
+    const startup = chat.startConversation(source, "Compare credit", "agent", null, null, undefined, controller.signal);
+    controller.abort();
+    finish();
+    await startup;
+
+    expect(bff.cleanup).toHaveBeenCalledExactlyOnceWith("new");
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(bff.turn).not.toHaveBeenCalled();
+    expect(sockets).toHaveLength(0);
+  });
+
+  it("avoids creating a session when startup was already canceled", async () => {
+    const chat = useChat(vi.fn());
+    const controller = new AbortController();
+    controller.abort();
+    await expect(chat.startConversation(
+      source, "Compare credit", "agent", null, null, undefined, controller.signal,
+    )).rejects.toMatchObject({ name: "AbortError" });
+    expect(bff.startFreechat).not.toHaveBeenCalled();
+  });
 });
 
 describe("chat event subscriptions", () => {
