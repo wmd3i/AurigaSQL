@@ -275,6 +275,7 @@ export function HomePage(props: {
         activeConversationId={props.activeId}
         onNewFlow={() => {
           handlePauseStart();
+          setDraft("");
           props.onNewFlow();
         }}
         onOpenWorkspaceSetup={props.onOpenWorkspaceSetup}
