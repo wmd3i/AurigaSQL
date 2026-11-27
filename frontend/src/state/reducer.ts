@@ -73,9 +73,6 @@ export function reducer(state: AppState, action: Action): AppState {
         error: null,
         createdAt: action.createdAt,
       };
-      if (action.background) {
-        return { ...state, conversations: [conv, ...state.conversations] };
-      }
       return {
         ...state,
         // agent mode lands on the answer-first result page; canvas mode goes straight to canvas.

@@ -11,7 +11,6 @@ export type ConversationStatus =
   | "stopped"
   | "error";
 export type QueryMode = "agent" | "workspace";
-export const CHAT_START_NAVIGATION = Symbol("chat startup navigation");
 export type CanvasBranchKind = "follow_up" | "fork";
 
 export type Conversation = {
@@ -79,7 +78,6 @@ export type Action =
       canvasTone?: CanvasToneId;
       canvasScope?: CanvasScope;
       preserveView?: boolean;
-      background?: boolean;
     }
   | {
       type: "LOCAL_BRANCH_STARTED";
