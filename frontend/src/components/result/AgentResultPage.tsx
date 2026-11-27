@@ -249,7 +249,7 @@ function ClarificationThread({
 
 /** A user turn, rendered as a right-aligned chat bubble. The database context
  *  rides along the first question only. */
-function QuestionBubble({ text, database }: { text: string; database?: string }) {
+export function QuestionBubble({ text, database }: { text: string; database?: string }) {
   return (
     <div className="flex flex-col items-end gap-1.5">
       <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-md border border-accent/20 bg-accent-soft px-4 py-2.5 text-[15px] font-medium leading-relaxed text-ink">
@@ -259,7 +259,7 @@ function QuestionBubble({ text, database }: { text: string; database?: string })
   );
 }
 
-function RunningState({ currentStep }: { currentStep: string | null }) {
+export function RunningState({ currentStep, title = "Working on your answer" }: { currentStep: string | null; title?: string }) {
   return (
     <section className="flex items-center gap-3.5 rounded-2xl border border-line bg-card px-5 py-4 shadow-sm">
       <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
@@ -269,7 +269,7 @@ function RunningState({ currentStep }: { currentStep: string | null }) {
         </span>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="shimmer-text text-[14px] font-semibold">Working on your answer</p>
+        <p className="shimmer-text text-[14px] font-semibold">{title}</p>
         <p className="mt-0.5 truncate text-[13px] text-muted">
           {currentStep ? currentStep : "Exploring the database"}
         </p>
