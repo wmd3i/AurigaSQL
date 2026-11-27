@@ -16,7 +16,7 @@ import {
   type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ChevronsDown, ChevronsUp, Clock3, Database, Home, Maximize2, Minimize2, Pause, Plus, RotateCcw, Scan, Settings2, Sparkles, Unplug } from "lucide-react";
+import { ChevronsDown, ChevronsUp, Clock3, Database, GitBranch, Home, Maximize2, Minimize2, Pause, Plus, RotateCcw, Scan, Settings2, Sparkles, Unplug } from "lucide-react";
 import { CanvasRail } from "./CanvasRail";
 import { CanvasZoomControl } from "./CanvasZoomControl";
 import { CanvasInspector } from "./CanvasInspector";
@@ -458,6 +458,13 @@ function CanvasInner(props: {
   const activeConv = useMemo(
     () => visibleConversations.find((c) => c.id === focusThreadId) ?? visibleConversations[0] ?? null,
     [visibleConversations, focusThreadId],
+  );
+  const selectedDataSource = useMemo(
+    () =>
+      activeConv?.source ??
+      props.dataSources?.find((source) => source.id === props.selectedDataSourceId && source.ready) ??
+      null,
+    [activeConv?.source, props.dataSources, props.selectedDataSourceId],
   );
   const runningConversation = useMemo(() => {
     if (activeConv && isRunningConversation(activeConv)) return activeConv;
@@ -1508,7 +1515,8 @@ function CanvasInner(props: {
                     />
                   ) : (
                     <CanvasSchemaPanel
-                      canvasDb={activeConv?.database ?? props.canvasDb}
+                      canvasDb={activeConv?.database ?? selectedDataSource?.display_name ?? props.canvasDb}
+                      source={selectedDataSource}
                       conversations={props.conversations}
                       activeId={focusThreadId}
                       panelWidth={leftPanelWidth}
@@ -1554,13 +1562,31 @@ function CanvasInner(props: {
               </Panel>
             )}
             {!props.hideModeSwitch && (
-              <Panel position="top-left">
+              <Panel position="top-left" className="flex flex-wrap items-center gap-2">
                 <FlowModeSwitch
                   mode="workspace"
                   onModeChange={(mode) => {
                     if (mode === "agent") props.onShowChat();
                   }}
                 />
+                {selectedDataSource && (
+                  <button
+                    type="button"
+                    aria-pressed={leftPanel === "schema"}
+                    onClick={() => toggleLeftPanel("schema")}
+                    title={`Inspect ${selectedDataSource.display_name} schema`}
+                    className={cn(
+                      "inline-flex h-10 items-center gap-2 rounded-full border px-3.5 text-[12.5px] font-medium shadow-sm transition",
+                      leftPanel === "schema"
+                        ? "border-accent bg-accent-soft text-accent"
+                        : "border-line bg-card/95 text-ink hover:bg-hover",
+                    )}
+                  >
+                    <DialectIcon dialect={selectedDataSource.engine} className="h-4 w-4" />
+                    <span className="max-w-[160px] truncate">{selectedDataSource.display_name}</span>
+                    <GitBranch className="h-3.5 w-3.5 text-muted" />
+                  </button>
+                )}
               </Panel>
             )}
             <Panel

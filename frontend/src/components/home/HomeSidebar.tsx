@@ -38,7 +38,6 @@ export function HomeSidebar(props: {
   pendingChat?: PendingChat | null;
   onNewFlow: () => void;
   onOpen: (id: string) => void;
-  onOpenWorkspaceSetup: () => void;
   onDeleteConversation?: (id: string) => void;
   activeSection?: SidebarSection;
   activeConversationId?: string | null;
@@ -104,19 +103,6 @@ export function HomeSidebar(props: {
           <SquarePen className="h-4 w-4" />
         </button>
         <button
-          onClick={props.onOpenWorkspaceSetup}
-          title="Connect db"
-          aria-label="Connect db"
-          className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
-            props.activeSection === "workspace"
-              ? "bg-accent-soft text-accent"
-              : "text-muted hover:bg-hover hover:text-ink",
-          )}
-        >
-          <Database className="h-4 w-4" />
-        </button>
-        <button
           onClick={openSettings ? () => openSettings() : props.onOpenLlmConfig}
           title="Settings"
           aria-label="Settings"
@@ -153,7 +139,7 @@ export function HomeSidebar(props: {
         </button>
       </div>
 
-      <div className="mb-5 space-y-2">
+      <div className="mb-5">
         <button
           onClick={props.onNewFlow}
           className={cn(
@@ -165,18 +151,6 @@ export function HomeSidebar(props: {
         >
           <SquarePen className="h-[17px] w-[17px]" />
           New chat
-        </button>
-        <button
-          onClick={props.onOpenWorkspaceSetup}
-          className={cn(
-            "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-[14px] transition-colors",
-            props.activeSection === "workspace"
-              ? "bg-accent-soft text-accent"
-              : "text-muted hover:bg-hover hover:text-ink",
-          )}
-        >
-          <Database className="h-[16px] w-[16px]" />
-          Connect data
         </button>
       </div>
 

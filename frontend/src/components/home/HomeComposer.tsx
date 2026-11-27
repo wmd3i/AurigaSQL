@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { ArrowUp, Database, Maximize2, Pause } from "lucide-react";
+import { ArrowUp, Maximize2, Pause } from "lucide-react";
 import { cn } from "../../lib/cn";
 import type { QueryMode } from "../../state/types";
 import { ModelPicker } from "../ModelPicker";
@@ -14,12 +14,10 @@ export function HomeComposer(props: {
   onChange: (v: string) => void;
   onSend: () => void;
   onStop: () => void;
-  onOpenDataSetup: () => void;
   mode?: QueryMode;
   onModeChange?: (mode: QueryMode) => void;
   onExpandCanvas?: () => void;
   busy: boolean;
-  hasDataSource: boolean;
   onOpenLlmConfig: () => void;
   hint: string | null; // e.g. "Please select a database first" or backend-down message
 }) {
@@ -86,26 +84,7 @@ export function HomeComposer(props: {
             : "min-h-[72px] max-h-[220px] text-[17px] leading-8",
         )}
       />
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-[160px] flex-wrap items-center gap-2 text-[13px] text-muted">
-          <button
-            type="button"
-            aria-label="Connect data"
-            onClick={props.onOpenDataSetup}
-            className={cn(
-              "group relative inline-flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition",
-              props.hasDataSource
-                ? "border-accent/45 bg-accent-soft text-accent"
-                : "border-line bg-canvas text-muted hover:bg-hover hover:text-ink",
-            )}
-          >
-            <Database className="h-4 w-4" />
-            <span className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-xl bg-ink px-3 py-1.5 text-[12px] font-semibold text-invert-ink opacity-0 shadow-[0_10px_24px_rgba(24,32,28,0.18)] transition group-hover:opacity-100">
-              Connect data
-            </span>
-          </button>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-[13px] text-muted">
+      <div className="mt-1 flex flex-wrap items-center justify-end gap-2 text-[13px] text-muted">
           <ModelPicker
             onOpenConfig={props.onOpenLlmConfig}
             showConfigButton={false}
@@ -129,7 +108,6 @@ export function HomeComposer(props: {
           >
             {props.busy ? <Pause className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
           </button>
-        </div>
       </div>
       {props.hint && <p className="mt-2 text-[12px] text-danger">{props.hint}</p>}
     </div>

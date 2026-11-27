@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Database, GitBranch, Link2, Maximize2, Minimize2 } from "lucide-react";
-import { bff } from "../../api/bff";
+import { bff, type DataSource } from "../../api/bff";
 import { cn } from "../../lib/cn";
 import { parseSchemaGraph, type SchemaGraph, type SchemaRelation } from "../../lib/schemaGraph";
 import type { Conversation } from "../../state/types";
@@ -588,10 +588,14 @@ function fittedViewport(
 
 export function CanvasSchemaPanel(props: {
   canvasDb: string;
+  source?: DataSource | null;
   conversations: Conversation[];
   activeId: string | null;
   panelWidth?: number;
 }) {
+  const schemaLookupKey = props.source?.id ?? props.canvasDb;
+  const displayDbName = props.source?.display_name ?? props.canvasDb;
+  const displayEngine = props.source?.engine ?? inferDataEngine(displayDbName);
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
   const [draggingGraph, setDraggingGraph] = useState(false);
   const [graphExpanded, setGraphExpanded] = useState(false);
@@ -636,14 +640,14 @@ export function CanvasSchemaPanel(props: {
     setSchemaText(null);
 
     bff
-      .databaseSchema(props.canvasDb)
+      .databaseSchema(schemaLookupKey)
       .then((response) => {
         if (cancelled) return;
         setSchemaText(response.schema);
       })
       .catch((error) => {
         if (cancelled) return;
-        console.warn(`Failed to load schema for ${props.canvasDb}`, error);
+        console.warn(`Failed to load schema for ${displayDbName}`, error);
         setSchemaText(null);
       })
       .finally(() => {
@@ -654,7 +658,7 @@ export function CanvasSchemaPanel(props: {
     return () => {
       cancelled = true;
     };
-  }, [props.canvasDb]);
+  }, [displayDbName, schemaLookupKey]);
 
   const fitScale = useMemo(() => {
     if (!layout || viewportSize.width === 0 || viewportSize.height === 0) return 1;
@@ -1038,8 +1042,8 @@ export function CanvasSchemaPanel(props: {
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-faint">Current DB</p>
             <div className="mt-0.5 flex items-center gap-2">
-              <DialectIcon dialect={inferDataEngine(props.canvasDb)} className="h-4 w-4 shrink-0" />
-              <p className="truncate text-[15px] font-semibold text-ink">{props.canvasDb}</p>
+              <DialectIcon dialect={displayEngine} className="h-4 w-4 shrink-0" />
+              <p className="truncate text-[15px] font-semibold text-ink">{displayDbName}</p>
             </div>
             <div className="mt-2 flex items-center gap-3 text-[11px] text-faint">
               <span className="inline-flex items-center gap-1">

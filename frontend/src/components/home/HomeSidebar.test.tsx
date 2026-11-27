@@ -23,7 +23,6 @@ function conversation(id: string, status: ConversationStatus) {
 const callbacks = {
   onNewFlow: () => {},
   onOpen: () => {},
-  onOpenWorkspaceSetup: () => {},
 };
 
 describe("History loading indicators", () => {
