@@ -154,8 +154,10 @@ export function reducer(state: AppState, action: Action): AppState {
         const terminal = c.status === "done" || c.status === "stopped";
         const answered = evt.type === "clarification_answer";
         const running = evt.type === "runtime_status" && evt.status === "running";
+        const finishesWithError = evt.type === "done" && c.rawEvents.at(-1)?.type === "error";
+        const error = isError ? evt.message : finishesWithError ? c.error : null;
         const pendingQuestion = answered || running || isDone || isError ? null : c.pendingQuestion;
-        const status = terminal ? c.status : isError ? "error" : isDone ? "done" : pendingQuestion ? "waiting_user" : "active";
+        const status = terminal ? c.status : isError || finishesWithError ? "error" : isDone ? "done" : pendingQuestion ? "waiting_user" : "active";
         return {
           ...c,
           rawEvents,
@@ -163,7 +165,7 @@ export function reducer(state: AppState, action: Action): AppState {
           pendingQuestion,
           status,
           turnInFlight: isDone || isError || status === "done" || status === "stopped" ? false : running || c.turnInFlight,
-          error: isError ? evt.message : null,
+          error,
         };
       });
     }
@@ -230,6 +232,11 @@ export function reducer(state: AppState, action: Action): AppState {
     }
     case "CONV_ERROR":
       return patch(state, action.id, (c) => ({ ...c, error: action.message, status: "error", turnInFlight: false }));
+    case "SESSION_NOT_FOUND":
+      return patch(state, action.id, (c) => {
+        if (c.status === "done" || c.status === "stopped") return { ...c, sseConnected: false };
+        return { ...c, sseConnected: false, error: action.message, status: "error", turnInFlight: false };
+      });
     case "DELETE_CONVERSATION": {
       const conversations = state.conversations.filter((c) => c.id !== action.id);
       const wasActive = state.activeId === action.id;
