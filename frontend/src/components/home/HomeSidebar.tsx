@@ -10,6 +10,8 @@ import { cn } from "../../lib/cn";
 import { useOpenSettings } from "../../state/settingsContext";
 import { inferDataEngine } from "../../lib/databaseEngine";
 import { PendingChatsContext } from "../../state/pendingChatsContext";
+import { SidebarWidthContext } from "../../state/sidebarWidthContext";
+import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from "../../lib/sidebarWidth";
 
 const SIDEBAR_BG = "app-shell-bg";
 type SidebarSection = "chat" | "workspace";
@@ -47,15 +49,16 @@ export function HomeSidebar(props: {
   onOpenLlmConfig?: () => void;
 }) {
   const openSettings = useOpenSettings();
+  const sidebarState = useContext(SidebarWidthContext);
   const pendingState = useContext(PendingChatsContext);
   const pendingChats = pendingState?.chats ?? (props.pendingChat ? [{ ...props.pendingChat, id: "pending" }] : []);
   const [collapsed, setCollapsed] = useState(false);
   const { width, dragging, onPointerDown } = useResizable({
-    initial: 288,
-    min: 220,
-    max: 480,
+    initial: sidebarState?.width ?? DEFAULT_SIDEBAR_WIDTH,
+    min: MIN_SIDEBAR_WIDTH,
+    max: MAX_SIDEBAR_WIDTH,
     edge: "right",
-    storageKey: "aurigasql-history-sidebar-width",
+    onResizeEnd: (width) => sidebarState?.dispatch({ type: "SET_SIDEBAR_WIDTH", width }),
   });
   const readySources = (props.dataSources ?? []).filter((source) => source.ready);
   const activeConversation = props.conversations.find((conversation) => conversation.id === props.activeConversationId) ?? null;

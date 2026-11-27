@@ -3,6 +3,7 @@ import { initialState, type AppState, type CanvasScope, type Conversation, type 
 import { inferDataEngine, normalizeDataEngine } from "../lib/databaseEngine";
 import type { DataSource } from "../api/bff";
 import { CANVAS_TONES, type CanvasToneId } from "../lib/canvasTones";
+import { normalizeSidebarWidth } from "../lib/sidebarWidth";
 
 const STORAGE_KEY = "aurigasql.app-state.v1";
 const LEGACY_STORAGE_KEY = "dbagent.app-state.v1";
@@ -133,6 +134,7 @@ function normalizeState(value: unknown): AppState {
 
   return {
     view: "home",
+    sidebar_width: normalizeSidebarWidth(record.sidebar_width),
     conversations,
     pendingChats: [],
     activeId: null,
@@ -148,8 +150,14 @@ export function loadAppState(): AppState {
   if (typeof window === "undefined") return initialState;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!raw) return initialState;
-    return normalizeState(JSON.parse(raw));
+    const parsed = raw ? JSON.parse(raw) : null;
+    const state = raw ? normalizeState(parsed) : initialState;
+    if (parsed?.sidebar_width !== undefined) return state;
+    // Preserve widths saved by the previous standalone preference.
+    const legacyWidth = window.localStorage.getItem("aurigasql-history-sidebar-width");
+    return legacyWidth?.trim()
+      ? { ...state, sidebar_width: normalizeSidebarWidth(Number(legacyWidth)) }
+      : state;
   } catch {
     return initialState;
   }

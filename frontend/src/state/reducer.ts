@@ -2,6 +2,7 @@ import { buildTimeline, type RawAgentEvent } from "../lib/buildTimeline";
 import { buildNodes } from "../lib/buildNodes";
 import { conversationWorkId } from "../lib/conversationHistory";
 import type { Action, AppState, Conversation } from "./types";
+import { normalizeSidebarWidth } from "../lib/sidebarWidth";
 
 function patch(
   state: AppState,
@@ -50,6 +51,10 @@ function statusFromEvents(events: RawAgentEvent[], fallback: Conversation["statu
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "SET_SIDEBAR_WIDTH": {
+      const width = normalizeSidebarWidth(action.width);
+      return state.sidebar_width === width ? state : { ...state, sidebar_width: width };
+    }
     case "PENDING_CHAT_STARTED":
       return { ...state, pendingChats: [action.chat, ...state.pendingChats] };
     case "PENDING_CHAT_DATABASE":

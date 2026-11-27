@@ -19,6 +19,7 @@ import type { Conversation } from "./state/types";
 import type { BranchTarget } from "./components/canvas/CanvasComposer";
 import type { CanvasToneId } from "./lib/canvasTones";
 import { PendingChatsContext } from "./state/pendingChatsContext";
+import { SidebarWidthContext } from "./state/sidebarWidthContext";
 
 const BRANCH_FIELD_LIMIT = 2400;
 const BRANCH_CONTEXT_LIMIT = 14000;
@@ -491,6 +492,7 @@ export default function App() {
     <ModelContext.Provider value={{ models, selectedId: modelId, setSelectedId: setModelId }}>
       <SettingsContext.Provider value={openSettings}>
       <PendingChatsContext.Provider value={{ chats: state.pendingChats, dispatch }}>
+      <SidebarWidthContext.Provider value={{ width: state.sidebar_width, dispatch }}>
       {content}
       <DataConnectionModal
         open={dataConnectionOpen}
@@ -504,6 +506,7 @@ export default function App() {
         onClose={() => setSettingsTab(null)}
         onModelsChanged={refreshModels}
       />
+      </SidebarWidthContext.Provider>
       </PendingChatsContext.Provider>
       </SettingsContext.Provider>
     </ModelContext.Provider>

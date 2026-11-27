@@ -2,6 +2,7 @@ import type { TimelineEvent, RawAgentEvent } from "../lib/buildTimeline";
 import type { StreamEvent } from "../api/eventStream";
 import type { DataSource } from "../api/bff";
 import type { CanvasToneId } from "../lib/canvasTones";
+import { DEFAULT_SIDEBAR_WIDTH } from "../lib/sidebarWidth";
 
 export type ConversationStatus =
   | "starting"
@@ -48,6 +49,7 @@ export type PendingHistoryChat = {
 };
 
 export type AppState = {
+  sidebar_width: number;
   view: View;
   pendingChats: PendingHistoryChat[];
   conversations: Conversation[]; // newest first — this IS the History list
@@ -60,6 +62,7 @@ export type AppState = {
 };
 
 export const initialState: AppState = {
+  sidebar_width: DEFAULT_SIDEBAR_WIDTH,
   view: "home",
   conversations: [],
   pendingChats: [],
@@ -72,6 +75,7 @@ export const initialState: AppState = {
 };
 
 export type Action =
+  | { type: "SET_SIDEBAR_WIDTH"; width: number }
   | { type: "PENDING_CHAT_STARTED"; chat: PendingHistoryChat }
   | { type: "PENDING_CHAT_DATABASE"; id: string; database: string }
   | { type: "PENDING_CHAT_FINISHED"; id: string }
