@@ -95,15 +95,23 @@ export function HomePage(props: {
   }
 
   async function sourceForQuery(query: string, signal: AbortSignal): Promise<{ source: DataSource; mismatch: SourceMismatch | null }> {
+    const matching = new AbortController();
+    const cancelMatching = () => {
+      if (signal.reason !== CHAT_START_NAVIGATION) matching.abort(signal.reason);
+    };
+    if (signal.aborted) cancelMatching();
+    else signal.addEventListener("abort", cancelMatching, { once: true });
     let resolved: Awaited<ReturnType<typeof bff.resolveDataSource>>;
     try {
-      resolved = await bff.resolveDataSource(query, modelId, signal);
+      resolved = await bff.resolveDataSource(query, modelId, matching.signal);
     } catch (error) {
-      if (signal.aborted) throw error;
+      if (matching.signal.aborted) throw error;
       if (selectedSource) {
         return { source: selectedSource, mismatch: null };
       }
       throw new Error(AUTO_MATCH_MANUAL_SELECT_HINT);
+    } finally {
+      signal.removeEventListener("abort", cancelMatching);
     }
     if (selectedSource) {
       if (resolved.source.id !== selectedSource.id) {
@@ -132,7 +140,7 @@ export function HomePage(props: {
     parentContext?: string,
     options?: { preserveView?: boolean; canvasTone?: CanvasToneId },
   ) {
-    setSourceMismatch(null);
+    if (!signal?.aborted) setSourceMismatch(null);
     await props.onStart(source, query, mode, signal, branchTarget, parentContext, options);
   }
 
@@ -149,6 +157,9 @@ export function HomePage(props: {
       await start(controller.signal);
     } catch (error) {
       if (!controller.signal.aborted) setHint(errorMessage(error));
+      else if (controller.signal.reason === CHAT_START_NAVIGATION) {
+        toast.error(errorMessage(error), { description: pending.title });
+      }
     } finally {
       if (startControllerRef.current === controller) {
         startControllerRef.current = null;
@@ -221,18 +232,28 @@ export function HomePage(props: {
     };
     await runPendingStart(pending, async (signal) => {
       const { source, mismatch } = await sourceForQuery(query, signal);
-      if (signal.aborted) return;
+      if (signal.aborted && signal.reason !== CHAT_START_NAVIGATION) return;
       if (mismatch) {
-        setSourceMismatch(mismatch);
+        if (signal.aborted) {
+          toast.error("Confirm the data source before sending this question again", { description: query });
+        } else {
+          setSourceMismatch(mismatch);
+        }
         return;
       }
-      setPendingChat({ ...pending, database: source.display_name });
+      if (!signal.aborted) setPendingChat({ ...pending, database: source.display_name });
       await startWithSource(source, query, "agent", signal);
     });
   }
 
   function handlePauseStart() {
     startControllerRef.current?.abort();
+    startControllerRef.current = null;
+    setPendingChat(null);
+  }
+
+  function leavePendingStart() {
+    startControllerRef.current?.abort(CHAT_START_NAVIGATION);
     startControllerRef.current = null;
     setPendingChat(null);
   }
@@ -262,7 +283,7 @@ export function HomePage(props: {
 
   function handleModeChange(mode: QueryMode) {
     if (mode !== "workspace") return;
-    handlePauseStart();
+    leavePendingStart();
     props.onOpenCanvas(selectedSource);
   }
 
@@ -274,7 +295,7 @@ export function HomePage(props: {
         activeSection="chat"
         activeConversationId={props.activeId}
         onNewFlow={() => {
-          handlePauseStart();
+          leavePendingStart();
           setDraft("");
           props.onNewFlow();
         }}

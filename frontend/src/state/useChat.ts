@@ -142,7 +142,7 @@ export function useChat(dispatch: Dispatch<Action>) {
       signal?: AbortSignal,
       options?: { preserveView?: boolean; canvasTone?: CanvasToneId; canvasWorkId?: string | null },
     ) => {
-      signal?.throwIfAborted();
+      if (signal?.reason !== CHAT_START_NAVIGATION) signal?.throwIfAborted();
       // Receive the task ID even if the caller leaves during creation.
       const started = await bff.startFreechat(source.id, query, model, branchFrom?.parentContext ?? null);
       const background = signal?.aborted && signal.reason === CHAT_START_NAVIGATION;
