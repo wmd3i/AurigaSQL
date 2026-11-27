@@ -1,6 +1,7 @@
 import { useCallback, useRef, type Dispatch } from "react";
 import { bff } from "../api/bff";
-import { openEventStream, type EventStreamHandle } from "../api/eventStream";
+import type { EventStreamHandle } from "../api/eventStream";
+import { openTaskStream } from "../api/eventSocket";
 import type { Action, CanvasScope, QueryMode } from "./types";
 import type { DataSource } from "../api/bff";
 import type { CanvasToneId } from "../lib/canvasTones";
@@ -11,6 +12,8 @@ type BranchFrom = {
   parentContext?: string;
   branchKind?: "follow_up" | "fork";
 };
+
+const SESSION_GONE_MESSAGE = "This session is no longer available. It may have been lost after a backend restart.";
 
 function errorFromTurnState(state: Record<string, unknown>): string | null {
   return typeof state.error === "string" && state.error.trim() ? state.error : null;
@@ -38,7 +41,7 @@ export function useChat(dispatch: Dispatch<Action>) {
           dispatch({
             type: "CONV_ERROR",
             id: taskId,
-            message: "This session is no longer available. It may have been lost after a backend restart.",
+            message: SESSION_GONE_MESSAGE,
           });
         });
     },
@@ -53,12 +56,16 @@ export function useChat(dispatch: Dispatch<Action>) {
         probeSession(taskId, existing);
         return;
       }
-      const handle = openEventStream(
-        taskId,
-        (event, eventIndex) => dispatch({ type: "SSE_EVENT", id: taskId, event, eventIndex }),
-        () => dispatch({ type: "SSE_STATUS", id: taskId, connected: false }),
-        () => dispatch({ type: "SSE_STATUS", id: taskId, connected: true }),
-      );
+      const handle = openTaskStream(taskId, {
+        onEvent: (event, eventIndex) => dispatch({ type: "SSE_EVENT", id: taskId, event, eventIndex }),
+        onDisconnect: () => dispatch({ type: "SSE_STATUS", id: taskId, connected: false }),
+        onConnect: () => dispatch({ type: "SSE_STATUS", id: taskId, connected: true }),
+        onNotFound: () => {
+          streams.current.delete(taskId);
+          probedSessions.current.delete(taskId);
+          dispatch({ type: "CONV_ERROR", id: taskId, message: SESSION_GONE_MESSAGE });
+        },
+      });
       streams.current.set(taskId, handle);
       probeSession(taskId, handle);
     },
