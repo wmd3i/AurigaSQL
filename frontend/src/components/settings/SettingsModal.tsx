@@ -1,15 +1,37 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, Database, Download, ExternalLink, Info, Monitor, Moon, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Database,
+  Download,
+  ExternalLink,
+  Info,
+  Monitor,
+  Moon,
+  SlidersHorizontal,
+  Sparkles,
+  Sun,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "../../lib/cn";
 import type { SettingsTab } from "../../state/settingsContext";
+import {
+  ACCENTS,
+  getAccent,
+  getThemePreference,
+  setAccent,
+  setThemePreference,
+  type AccentColor,
+  type ThemePreference,
+} from "../../lib/theme";
 import { LlmConfigModal, type EmbeddedHeader } from "./LlmConfigModal";
 
 // Keep in sync with frontend/package.json "version".
 const APP_VERSION = "0.1.0";
 const REPO_URL = "https://github.com/wmd3i/AurigaSQL";
-
-type Theme = "light" | "dark" | "system";
 
 const TABS: Array<{ id: SettingsTab; label: string; icon: typeof Sun }> = [
   { id: "general", label: "General", icon: SlidersHorizontal },
@@ -18,23 +40,50 @@ const TABS: Array<{ id: SettingsTab; label: string; icon: typeof Sun }> = [
   { id: "about", label: "About", icon: Info },
 ];
 
-const THEMES: Array<{ id: Theme; label: string; icon: typeof Sun }> = [
-  { id: "light", label: "Light", icon: Sun },
-  { id: "dark", label: "Dark", icon: Moon },
-  { id: "system", label: "System", icon: Monitor },
+const THEMES: Array<{
+  id: ThemePreference;
+  label: string;
+  icon: typeof Sun;
+  hint: string;
+}> = [
+  { id: "light", label: "Light", icon: Sun, hint: "Light theme" },
+  { id: "dark", label: "Dark", icon: Moon, hint: "Dark theme" },
+  {
+    id: "system",
+    label: "System",
+    icon: Monitor,
+    hint: "Follow your computer's light or dark setting",
+  },
 ];
+
+/** Swatch colors (light shade) for the accent picker. */
+const ACCENT_SWATCH: Record<AccentColor, { label: string; color: string }> = {
+  plain: { label: "Plain", color: "" },
+  teal: { label: "Teal", color: "#0f766e" },
+  indigo: { label: "Indigo", color: "#4f46e5" },
+  violet: { label: "Violet", color: "#7c3aed" },
+  amber: { label: "Amber", color: "#b45309" },
+};
 
 /** Placeholder handler: these settings render but are not wired up yet. */
 function comingSoon(feature: string) {
   toast.info(`${feature} isn't available yet`, { id: "settings-coming-soon" });
 }
 
-function Section(props: { title: string; description?: string; children: ReactNode }) {
+function Section(props: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
   return (
     <section className="space-y-2.5">
       <div>
         <h3 className="text-[13.5px] font-semibold text-ink">{props.title}</h3>
-        {props.description && <p className="mt-0.5 text-[12.5px] leading-5 text-muted">{props.description}</p>}
+        {props.description && (
+          <p className="mt-0.5 text-[12.5px] leading-5 text-muted">
+            {props.description}
+          </p>
+        )}
       </div>
       {props.children}
     </section>
@@ -53,8 +102,17 @@ function ActionRow(props: {
   return (
     <div className="flex items-center gap-4 py-3">
       <div className="min-w-0 flex-1">
-        <div className={cn("text-[13.5px] font-medium", props.danger ? "text-danger" : "text-ink")}>{props.title}</div>
-        <div className="mt-0.5 text-[12.5px] leading-5 text-muted">{props.description}</div>
+        <div
+          className={cn(
+            "text-[13.5px] font-medium",
+            props.danger ? "text-danger" : "text-ink",
+          )}
+        >
+          {props.title}
+        </div>
+        <div className="mt-0.5 text-[12.5px] leading-5 text-muted">
+          {props.description}
+        </div>
       </div>
       <button
         type="button"
@@ -74,34 +132,99 @@ function ActionRow(props: {
 }
 
 function GeneralTab() {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<ThemePreference>(getThemePreference);
+  const [accent, setAccentState] = useState<AccentColor>(getAccent);
   const [systemPrompt, setSystemPrompt] = useState("");
 
   return (
     <div className="space-y-7">
-      <Section title="Theme" description="Choose how AurigaSQL looks.">
-        <div role="radiogroup" aria-label="Theme" className="inline-flex rounded-full border border-line bg-surface p-0.5">
-          {THEMES.map((option) => {
-            const Icon = option.icon;
-            const active = theme === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => setTheme(option.id)}
-                title={option.id === "system" ? "Follow your computer's setting" : `${option.label} theme`}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition",
-                  active ? "bg-card text-ink shadow-sm" : "text-muted hover:text-ink",
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {option.label}
-              </button>
-            );
-          })}
+      <Section
+        title="Theme"
+        description="Light, dark or follow your computer, plus an accent color."
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            role="radiogroup"
+            aria-label="Mode"
+            className="inline-flex rounded-full border border-line bg-surface p-0.5"
+          >
+            {THEMES.map((option) => {
+              const Icon = option.icon;
+              const active = theme === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => {
+                    setTheme(option.id);
+                    setThemePreference(option.id);
+                  }}
+                  title={option.hint}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition",
+                    active
+                      ? "bg-card text-ink shadow-sm"
+                      : "text-muted hover:text-ink",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <span aria-hidden className="h-6 w-px bg-line" />
+          <div
+            role="radiogroup"
+            aria-label="Accent color"
+            className="flex items-center gap-1.5"
+          >
+            {ACCENTS.map((id) => {
+              const swatch = ACCENT_SWATCH[id];
+              const active = accent === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={swatch.label}
+                  onClick={() => {
+                    setAccentState(id);
+                    setAccent(id);
+                  }}
+                  className={cn(
+                    "group relative flex h-8 w-8 items-center justify-center rounded-full border-2 transition",
+                    active
+                      ? "border-ink/40"
+                      : "border-transparent hover:border-line",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex h-6 w-6 items-center justify-center rounded-full",
+                      // Plain = no color, so its swatch is the text color (black in light, light grey in dark).
+                      id === "plain" && "bg-ink",
+                    )}
+                    style={id === "plain" ? undefined : { background: swatch.color }}
+                  >
+                    {active && (
+                      <Check className={cn("h-3.5 w-3.5", id === "plain" ? "text-canvas" : "text-white")} />
+                    )}
+                  </span>
+                  {/* Instant label on hover / keyboard focus (the native title tooltip is slow). */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-invert px-2 py-0.5 text-[11.5px] font-medium text-invert-ink opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                  >
+                    {swatch.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </Section>
 
@@ -113,7 +236,9 @@ function GeneralTab() {
           value={systemPrompt}
           onChange={(event) => setSystemPrompt(event.target.value)}
           rows={5}
-          placeholder={"e.g. Our fiscal year starts in April.\n\"Revenue\" means amount minus refunds."}
+          placeholder={
+            'e.g. Our fiscal year starts in April.\n"Revenue" means amount minus refunds.'
+          }
           className="w-full resize-none rounded-xl border border-line bg-card px-3.5 py-3 text-[13.5px] leading-6 text-ink outline-none transition placeholder:text-faint focus:border-accent"
         />
         <div className="flex justify-end">
@@ -132,7 +257,10 @@ function GeneralTab() {
 
 function DataTab() {
   return (
-    <Section title="Chats" description="Back up, restore or clear your chat history.">
+    <Section
+      title="Chats"
+      description="Back up, restore or clear your chat history."
+    >
       <div className="divide-y divide-line/70">
         <ActionRow
           title="Export chats"
@@ -167,7 +295,12 @@ function AboutTab() {
     {
       label: "Source code",
       value: (
-        <a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-accent hover:underline"
+        >
           github.com/wmd3i/AurigaSQL
           <ExternalLink className="h-3 w-3" />
         </a>
@@ -182,7 +315,10 @@ function AboutTab() {
       </div>
       <dl className="divide-y divide-line/70 rounded-2xl border border-line">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-4 px-4 py-3 text-[13.5px]">
+          <div
+            key={row.label}
+            className="flex items-center justify-between gap-4 px-4 py-3 text-[13.5px]"
+          >
             <dt className="text-muted">{row.label}</dt>
             <dd className="text-ink">{row.value}</dd>
           </div>
@@ -225,7 +361,7 @@ export function SettingsModal(props: {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(12,16,12,0.32)] p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) props.onClose();
       }}
@@ -237,7 +373,9 @@ export function SettingsModal(props: {
           aria-label="Settings sections"
           className="flex w-[184px] shrink-0 flex-col gap-0.5 border-r border-line/70 bg-surface/60 px-3 py-5"
         >
-          <h2 className="mb-3 px-2.5 text-[18px] font-semibold tracking-[-0.01em] text-ink">Settings</h2>
+          <h2 className="mb-3 px-2.5 text-[18px] font-semibold tracking-[-0.01em] text-ink">
+            Settings
+          </h2>
           {TABS.map((item) => {
             const Icon = item.icon;
             const active = tab === item.id;
@@ -253,7 +391,9 @@ export function SettingsModal(props: {
                 }}
                 className={cn(
                   "flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium transition",
-                  active ? "bg-card text-ink shadow-sm ring-1 ring-line/70" : "text-muted hover:bg-hover hover:text-ink",
+                  active
+                    ? "bg-card text-ink shadow-sm ring-1 ring-line/70"
+                    : "text-muted hover:bg-hover hover:text-ink",
                 )}
               >
                 <Icon className={cn("h-4 w-4", active && "text-accent")} />
@@ -279,7 +419,8 @@ export function SettingsModal(props: {
               </button>
             )}
             <h2 className="flex-1 text-[15px] font-semibold text-ink">
-              {(tab === "models" && subHeader?.title) || TABS.find((item) => item.id === tab)?.label}
+              {(tab === "models" && subHeader?.title) ||
+                TABS.find((item) => item.id === tab)?.label}
             </h2>
             <button
               type="button"

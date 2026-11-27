@@ -162,7 +162,7 @@ function OpenClarification({ question, onAnswer }: { question: string; onAnswer:
               onClick={() => setActive(i)}
               className={cn(
                 "flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
-                active === i ? "bg-accent text-invert-ink" : "bg-card text-muted hover:bg-hover",
+                active === i ? "bg-accent text-accent-ink" : "bg-card text-muted hover:bg-hover",
               )}
             >
               Clarification {i + 1}

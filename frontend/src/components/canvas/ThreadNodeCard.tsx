@@ -445,7 +445,7 @@ function ToolGroupCard(props: {
     <div className="relative flex items-start">
       <button
         onClick={props.onToggle}
-        className="nopan flex h-11 w-[320px] shrink-0 items-center justify-center gap-2 rounded-2xl bg-accent px-4 text-invert-ink shadow-[0_8px_18px_rgba(15,118,110,0.18)] transition-transform hover:scale-[1.02]"
+        className="nopan flex h-11 w-[320px] shrink-0 items-center justify-center gap-2 rounded-2xl bg-accent px-4 text-accent-ink shadow-[0_8px_18px_rgba(15,118,110,0.18)] transition-transform hover:scale-[1.02]"
         aria-label={props.open ? "Collapse tool group" : "Expand tool group"}
         title={props.title}
       >

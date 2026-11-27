@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AurigaSQL</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a light flash (see src/lib/theme.ts).
+      (function () {
+        var pref = "system", accent = "plain";
+        try {
+          pref = localStorage.getItem("aurigasql-theme") || "system";
+          accent = localStorage.getItem("aurigasql-accent") || "plain";
+        } catch (e) {}
+        var dark = pref === "dark" || (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        document.documentElement.dataset.accent = accent;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import App from "./App";
 import "./index.css";
+import { initTheme } from "./lib/theme";
+
+initTheme();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
