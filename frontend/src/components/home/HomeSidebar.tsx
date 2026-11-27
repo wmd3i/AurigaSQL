@@ -17,15 +17,15 @@ type PendingChat = { title: string; database?: string };
 function HistoryTitle({ title, selected, running }: { title: string; selected: boolean; running: boolean }) {
   return (
     <span className="flex items-center gap-2">
-      <span className={cn("min-w-0 flex-1 truncate text-[14.5px]", selected ? "text-accent" : "text-ink")}>
-        {title}
-      </span>
       {running && (
         <span className="shrink-0 text-accent" title="Working">
           <Loader2 aria-hidden="true" className="h-3.5 w-3.5 motion-safe:animate-spin" />
           <span className="sr-only">Working</span>
         </span>
       )}
+      <span className={cn("min-w-0 flex-1 truncate text-[14.5px]", selected ? "text-accent" : "text-ink")}>
+        {title}
+      </span>
     </span>
   );
 }

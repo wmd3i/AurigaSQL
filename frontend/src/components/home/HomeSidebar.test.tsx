@@ -33,6 +33,7 @@ describe("History loading indicators", () => {
     expect(history).toContain(query);
     expect(history).toContain("Choosing a database…");
     expect(history).toContain('title="Working"');
+    expect(history.indexOf('title="Working"')).toBeLessThan(history.indexOf(query));
     expect(history).not.toContain("No conversations yet.");
   });
 
