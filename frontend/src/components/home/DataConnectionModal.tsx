@@ -54,7 +54,7 @@ export function DataConnectionModal(props: {
   if (!props.open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(12,16,12,0.32)] p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm">
       <div className="relative flex h-[min(760px,94vh)] w-full max-w-[860px] overflow-hidden rounded-[34px] border border-line bg-[#fbfbf8] shadow-[0_32px_100px_rgba(11,18,14,0.18)]">
         <button
           type="button"

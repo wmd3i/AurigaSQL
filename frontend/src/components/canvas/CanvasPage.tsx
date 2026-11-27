@@ -1545,7 +1545,7 @@ function CanvasInner(props: {
                       type="button"
                       onClick={props.onConnectData}
                       title="Add a database or file to query"
-                      className="rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-invert-ink transition hover:opacity-90"
+                      className="rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-accent-ink transition hover:opacity-90"
                     >
                       Connect data
                     </button>

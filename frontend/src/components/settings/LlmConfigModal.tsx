@@ -1058,7 +1058,7 @@ export function LlmConfigModal(props: {
       className={cn(
         props.embedded
           ? "flex min-h-0 flex-1 flex-col"
-          : "fixed inset-0 z-50 flex items-center justify-center bg-[rgba(12,16,12,0.32)] p-4 backdrop-blur-sm",
+          : "fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm",
       )}
       onMouseDown={(event) => {
         if (!props.embedded && event.target === event.currentTarget && !saving) props.onClose();

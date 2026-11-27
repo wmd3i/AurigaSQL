@@ -1,25 +1,70 @@
 @import "tailwindcss";
 
-/* Semantic tokens. Light values now; a future `.dark { … }` block plus a
-   class toggle on <html> is the entire dark-mode switch. Components must
-   ONLY use these via the @theme utilities below — never raw palette colors. */
+/* Semantic tokens. Components must ONLY use these via the @theme utilities
+   below — never raw palette colors. The theme is chosen by `data-theme` on
+   <html> (see src/lib/theme.ts): light (default) or dark, both on a neutral
+   grey scale like Open WebUI. The accent color is chosen separately by
+   `data-accent` (plain default, teal, indigo, violet, amber), with its own light and
+   dark shades so it stays readable in both. */
 :root {
-  --surface: #f7f6f1;      /* page background */
+  color-scheme: light;
+  --surface: #f8f8f8;      /* page / sidebar background */
   --canvas: #ffffff;       /* main content background */
-  --card: #ffffff;         /* cards, composer */
-  --ink: #18201c;          /* primary text */
-  --muted: #5f6d66;        /* secondary text */
-  --faint: #98a59f;        /* placeholder / disabled text */
-  --line: #dedfd6;         /* borders */
-  --hover: #efefe8;        /* hover fills */
-  --accent: #0f766e;       /* deep teal accent */
-  --accent-soft: #e7f5f2;  /* accent tint fills */
-  --invert: #18201c;       /* dark pill / send button background */
+  --card: #ffffff;         /* cards, composer, panels */
+  --ink: #161616;          /* primary text */
+  --muted: #666666;        /* secondary text */
+  --faint: #9b9b9b;        /* placeholder / disabled text */
+  --line: #e4e4e4;         /* borders */
+  --hover: #ebebeb;        /* hover fills */
+  --accent: #161616;       /* accent: plain (monochrome) by default, see [data-accent] below */
+  --accent-soft: #ebebeb;  /* accent tint fills */
+  --accent-ink: #ffffff;   /* text on an accent background */
+  --invert: #161616;       /* dark pill / send button background */
   --invert-ink: #ffffff;   /* text on invert */
-  --pause: #0f766e;        /* pause/interrupt action */
+  --pause: var(--accent);  /* pause/interrupt action */
   --danger: #dc2626;
   --danger-soft: #fef2f2;
+  --shell-bg: #ffffff;
+  --overlay: rgba(0, 0, 0, 0.3);
+  --dot: rgba(0, 0, 0, 0.1);
+  --shadow: rgba(0, 0, 0, 0.12);
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #0d0d0d;
+  --canvas: #161616;
+  --card: #212121;
+  --ink: #ebebeb;
+  --muted: #b4b4b4;
+  --faint: #7a7a7a;
+  --line: #333333;
+  --hover: #2b2b2b;
+  --accent: #ebebeb;
+  --accent-soft: #333333;
+  --accent-ink: #0d0d0d;
+  --invert: #ffffff;
+  --invert-ink: #000000;
+  --pause: var(--accent);
+  --danger: #f87171;
+  --danger-soft: #3a1d1d;
+  --shell-bg: #161616;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --dot: rgba(255, 255, 255, 0.08);
+  --shadow: rgba(0, 0, 0, 0.5);
+}
+
+
+/* Accent colors. Light shades pass contrast on white; dark shades on #161616. */
+:root[data-accent="teal"] { --accent: #0f766e; --accent-soft: #e7f5f2; }
+:root[data-accent="indigo"] { --accent: #4f46e5; --accent-soft: #eef2ff; }
+:root[data-accent="violet"] { --accent: #7c3aed; --accent-soft: #f5f3ff; }
+:root[data-accent="amber"] { --accent: #b45309; --accent-soft: #fef3c7; }
+:root[data-theme="dark"][data-accent="teal"] { --accent: #2dd4bf; }
+:root[data-theme="dark"][data-accent="indigo"] { --accent: #818cf8; }
+:root[data-theme="dark"][data-accent="violet"] { --accent: #a78bfa; }
+:root[data-theme="dark"][data-accent="amber"] { --accent: #fbbf24; }
+:root[data-theme="dark"]:not([data-accent="plain"])[data-accent] { --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent); }
 
 @theme inline {
   --color-surface: var(--surface);
@@ -32,11 +77,13 @@
   --color-hover: var(--hover);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
   --color-invert: var(--invert);
   --color-invert-ink: var(--invert-ink);
   --color-pause: var(--pause);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-overlay: var(--overlay);
 }
 
 html,
@@ -45,8 +92,13 @@ body,
   height: 100%;
 }
 
+body {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
 .app-shell-bg {
-  background: radial-gradient(circle at top, #eef7ef 0%, #fafaf8 45%, #f5f2e8 100%);
+  background: var(--shell-bg);
 }
 
 /* Shimmering text used by the "Working…" running state. */
@@ -149,7 +201,7 @@ body,
 .canvas-expand-card {
   border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
   background-color: var(--canvas);
-  box-shadow: 0 24px 80px rgba(24, 32, 28, 0.14);
+  box-shadow: 0 24px 80px var(--shadow);
   transform-origin: 0 0;
 }
 
@@ -179,7 +231,7 @@ body {
 
 .canvas-dot-background {
   background-color: var(--canvas);
-  background-image: radial-gradient(circle, rgba(95, 109, 102, 0.14) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
   background-position: center;
   background-size: 24px 24px;
 }

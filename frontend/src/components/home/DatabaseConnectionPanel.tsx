@@ -506,7 +506,7 @@ export function DatabaseConnectionPanel(props: {
               type="button"
               onClick={save}
               disabled={busy !== null}
-              className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-accent px-3 text-[12px] font-medium text-white transition hover:opacity-90 disabled:opacity-60"
+              className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-accent px-3 text-[12px] font-medium text-accent-ink transition hover:opacity-90 disabled:opacity-60"
             >
               {busy === "save" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
               Save
