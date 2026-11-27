@@ -140,9 +140,9 @@ export function useChat(dispatch: Dispatch<Action>) {
       branchFrom?: BranchFrom | null,
       canvasScope?: CanvasScope,
       signal?: AbortSignal,
-      options?: { preserveView?: boolean; canvasTone?: CanvasToneId; canvasWorkId?: string | null },
+      options?: { preserveView?: boolean; canvasTone?: CanvasToneId; canvasWorkId?: string | null; pendingId?: string },
     ) => {
-      signal?.throwIfAborted();
+      if (signal?.reason !== CHAT_START_NAVIGATION) signal?.throwIfAborted();
       // Receive the task ID even if the caller leaves during creation.
       const started = await bff.startFreechat(source.id, query, model, branchFrom?.parentContext ?? null);
       const background = signal?.aborted && signal.reason === CHAT_START_NAVIGATION;
@@ -167,6 +167,7 @@ export function useChat(dispatch: Dispatch<Action>) {
         canvasScope,
         preserveView: options?.preserveView,
         background,
+        pendingId: options?.pendingId,
       });
       sendMessage(started.task_id, query, model);
       // Fire-and-forget: a short AI title for the sidebar (from the first query).

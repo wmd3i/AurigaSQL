@@ -8,6 +8,31 @@ const started: AppState = reducer(initialState, {
 });
 
 describe("reducer", () => {
+  it("replaces a pending History entry atomically while preserving other pending questions", () => {
+    let state = reducer(started, {
+      type: "PENDING_CHAT_STARTED", chat: { id: "first", title: "First question", createdAt: 2 },
+    });
+    state = reducer(state, {
+      type: "PENDING_CHAT_STARTED", chat: { id: "second", title: "Second question", createdAt: 3 },
+    });
+    state = reducer(state, { type: "NEW_FLOW" });
+    state = reducer(state, { type: "PENDING_CHAT_DATABASE", id: "first", database: "db1" });
+    expect(state.pendingChats).toHaveLength(2);
+    state = reducer(state, {
+      type: "CONVERSATION_STARTED", id: "created", pendingId: "first", background: true,
+      title: "First question", database: "db1", databases: ["db1"], mode: "agent", createdAt: 99,
+    });
+    expect(state.pendingChats.map((chat) => chat.id)).toEqual(["second"]);
+    expect(state.conversations.map((chat) => chat.id)).toEqual(["created", "t1"]);
+    expect(state.conversations[0].createdAt).toBe(2);
+    expect(state).toMatchObject({ view: "home", activeId: null });
+
+    state = reducer(state, { type: "PENDING_CHAT_FINISHED", id: "first" });
+    expect(state.pendingChats.map((chat) => chat.id)).toEqual(["second"]);
+    state = reducer(state, { type: "PENDING_CHAT_FINISHED", id: "second" });
+    expect(state.pendingChats).toEqual([]);
+  });
+
   it("CONVERSATION_STARTED (agent) prepends conversation, activates it, lands on result page", () => {
     expect(started.view).toBe("result");
     expect(started.activeId).toBe("t1");

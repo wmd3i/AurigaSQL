@@ -18,6 +18,7 @@ import { buildNodes, type ThreadNode } from "./lib/buildNodes";
 import type { Conversation } from "./state/types";
 import type { BranchTarget } from "./components/canvas/CanvasComposer";
 import type { CanvasToneId } from "./lib/canvasTones";
+import { PendingChatsContext } from "./state/pendingChatsContext";
 
 const BRANCH_FIELD_LIMIT = 2400;
 const BRANCH_CONTEXT_LIMIT = 14000;
@@ -221,7 +222,7 @@ export default function App() {
     signal?: AbortSignal,
     branchTarget?: BranchTarget | null,
     parentContext?: string,
-    options?: { preserveView?: boolean; canvasTone?: CanvasToneId },
+    options?: { preserveView?: boolean; canvasTone?: CanvasToneId; pendingId?: string },
   ) =>
     {
       const canvasWorkId =
@@ -489,6 +490,7 @@ export default function App() {
   return (
     <ModelContext.Provider value={{ models, selectedId: modelId, setSelectedId: setModelId }}>
       <SettingsContext.Provider value={openSettings}>
+      <PendingChatsContext.Provider value={{ chats: state.pendingChats, dispatch }}>
       {content}
       <DataConnectionModal
         open={dataConnectionOpen}
@@ -502,6 +504,7 @@ export default function App() {
         onClose={() => setSettingsTab(null)}
         onModelsChanged={refreshModels}
       />
+      </PendingChatsContext.Provider>
       </SettingsContext.Provider>
     </ModelContext.Provider>
   );

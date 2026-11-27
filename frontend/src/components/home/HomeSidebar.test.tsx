@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { reducer } from "../../state/reducer";
 import { initialState, type ConversationStatus } from "../../state/types";
 import { HomeSidebar } from "./HomeSidebar";
+import { PendingChatsContext } from "../../state/pendingChatsContext";
 
 const query = "Compare average credit utilization across customer segments.";
 
@@ -26,6 +27,25 @@ const callbacks = {
 };
 
 describe("History loading indicators", () => {
+  it("keeps background pending questions visible without a foreground preview", () => {
+    const history = renderToStaticMarkup(
+      <PendingChatsContext.Provider value={{
+        chats: [
+          { id: "first", title: "First question", createdAt: 1 },
+          { id: "second", title: "Second question", database: "Credit data", createdAt: 2 },
+        ],
+        dispatch: () => {},
+      }}>
+        <HomeSidebar {...callbacks} conversations={[]} pendingChat={null} />
+      </PendingChatsContext.Provider>,
+    );
+    expect(history).toContain("First question");
+    expect(history).toContain("Second question");
+    expect(history).toContain("Choosing a database…");
+    expect(history.match(/title="Working"/g)).toHaveLength(2);
+    expect(history).not.toContain("No conversations yet.");
+  });
+
   it("shows the submitted question while its database is still being selected", () => {
     const history = renderToStaticMarkup(
       <HomeSidebar {...callbacks} conversations={[]} pendingChat={{ title: query }} />,

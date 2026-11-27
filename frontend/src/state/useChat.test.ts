@@ -114,7 +114,7 @@ describe("chat startup", () => {
     });
   }
 
-  it("keeps the new chat running in History when navigation happens during creation", async () => {
+  it.each(["before creation", "during creation"])("keeps the new chat running in History when navigation happens %s", async (timing) => {
     let state = reducer(initialState, {
       type: "CONVERSATION_STARTED", id: "history", database: "db", databases: ["db"],
       title: "History entry", mode: "agent", createdAt: 1,
@@ -123,8 +123,9 @@ describe("chat startup", () => {
     const chat = useChat((action) => { state = reducer(state, action); });
     const finish = pendingStart();
     const controller = new AbortController();
+    if (timing === "before creation") controller.abort(CHAT_START_NAVIGATION);
     const startup = chat.startConversation(source, "Compare credit", "agent", null, null, undefined, controller.signal);
-    controller.abort(CHAT_START_NAVIGATION);
+    if (timing === "during creation") controller.abort(CHAT_START_NAVIGATION);
     finish();
     await startup;
     dispose = () => chat.clearConversations(["new"]);

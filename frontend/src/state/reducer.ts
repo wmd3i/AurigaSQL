@@ -50,7 +50,17 @@ function statusFromEvents(events: RawAgentEvent[], fallback: Conversation["statu
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "PENDING_CHAT_STARTED":
+      return { ...state, pendingChats: [action.chat, ...state.pendingChats] };
+    case "PENDING_CHAT_DATABASE":
+      return {
+        ...state,
+        pendingChats: state.pendingChats.map((chat) => chat.id === action.id ? { ...chat, database: action.database } : chat),
+      };
+    case "PENDING_CHAT_FINISHED":
+      return { ...state, pendingChats: state.pendingChats.filter((chat) => chat.id !== action.id) };
     case "CONVERSATION_STARTED": {
+      const pending = state.pendingChats.find((chat) => chat.id === action.pendingId);
       const conv: Conversation = {
         id: action.id,
         source: action.source,
@@ -71,13 +81,13 @@ export function reducer(state: AppState, action: Action): AppState {
         turnInFlight: false,
         sseConnected: false,
         error: null,
-        createdAt: action.createdAt,
+        createdAt: pending?.createdAt ?? action.createdAt,
       };
-      if (action.background) {
-        return { ...state, conversations: [conv, ...state.conversations] };
-      }
+      const pendingChats = state.pendingChats.filter((chat) => chat.id !== action.pendingId);
+      if (action.background) return { ...state, pendingChats, conversations: [conv, ...state.conversations] };
       return {
         ...state,
+        pendingChats,
         // agent mode lands on the answer-first result page; canvas mode goes straight to canvas.
         // Embedded canvas starts the same real thread but stays on the home surface until expanded.
         view: action.preserveView ? state.view : action.mode === "agent" ? "result" : "canvas",
