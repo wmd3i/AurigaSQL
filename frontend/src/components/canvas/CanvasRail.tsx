@@ -1,6 +1,8 @@
 import { useContext, useMemo } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { buildHistoryItems } from "../../lib/conversationHistory";
+import { useHistoryIconStyle } from "../../lib/historyIcons";
+import { HistoryAvatar } from "../home/HistoryAvatar";
 import { cn } from "../../lib/cn";
 import { inferDataEngine } from "../../lib/databaseEngine";
 import type { Conversation, ConversationStatus } from "../../state/types";
@@ -71,6 +73,7 @@ export function CanvasRail(props: {
   onDeleteThread?: (id: string) => void;
 }) {
   const pendingChats = useContext(PendingChatsContext)?.chats ?? [];
+  const iconStyle = useHistoryIconStyle();
   const works = useMemo<CanvasWork[]>(() => {
     return buildHistoryItems(props.conversations).map((item) => ({
       id: item.key,
@@ -133,18 +136,24 @@ export function CanvasRail(props: {
                     onClick={() => props.onSelectThread(work.latest.id)}
                     className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
                   >
-                  <span
-                    className={cn(
-                      "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
-                      work.status === "error"
-                        ? "bg-danger"
-                        : work.status === "waiting_user"
-                          ? "bg-accent"
-                          : work.status === "done"
-                            ? "bg-muted/50"
-                            : "bg-accent",
-                    )}
-                  />
+                  {/* The status pill on the right already names the state, so the chosen
+                      History icon takes the status dot's place; with icons off the dot stays. */}
+                  {iconStyle === "off" ? (
+                    <span
+                      className={cn(
+                        "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
+                        work.status === "error"
+                          ? "bg-danger"
+                          : work.status === "waiting_user"
+                            ? "bg-accent"
+                            : work.status === "done"
+                              ? "bg-muted/50"
+                              : "bg-accent",
+                      )}
+                    />
+                  ) : (
+                    <HistoryAvatar seed={work.id} className="mt-0.5 h-7 w-7 shrink-0 text-muted" />
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className={cn("block truncate text-[13px] font-medium", active ? "text-ink" : "text-ink/90")}>
                       {c.summary || c.title}
