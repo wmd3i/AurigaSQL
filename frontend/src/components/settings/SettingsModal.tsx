@@ -36,6 +36,7 @@ import {
 } from "../../lib/notifications";
 import { DataConnectionModal } from "../home/DataConnectionModal";
 import { LlmConfigModal, type EmbeddedHeader } from "./LlmConfigModal";
+import { HistoryIconPicker } from "./HistoryIconPicker";
 
 // Keep in sync with frontend/package.json "version".
 const APP_VERSION = "0.1.0";
@@ -247,6 +248,13 @@ function GeneralTab() {
             })}
           </div>
         </div>
+      </Section>
+
+      <Section
+        title="History icons"
+        description="An icon beside each conversation in History."
+      >
+        <HistoryIconPicker />
       </Section>
 
       <Section

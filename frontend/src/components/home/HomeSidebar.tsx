@@ -4,6 +4,7 @@ import type { DataSource } from "../../api/bff";
 import type { Conversation } from "../../state/types";
 import { buildHistoryItems } from "../../lib/conversationHistory";
 import { DialectIcon } from "./DialectIcon";
+import { HistoryAvatar, HistoryAvatarPlaceholder } from "./HistoryAvatar";
 import { useResizable } from "../../lib/useResizable";
 import { ResizeHandle } from "../ResizeHandle";
 import { cn } from "../../lib/cn";
@@ -159,13 +160,16 @@ export function HomeSidebar(props: {
         {pendingChats.map((pending) => (
           <div
             key={pending.id}
-            className={cn("rounded-xl px-3 py-2.5", pending.id === props.pendingChat?.id && "bg-accent-soft", props.onDeleteConversation && "pr-12")}
+            className={cn("flex items-center gap-2.5 rounded-xl px-3 py-2.5", pending.id === props.pendingChat?.id && "bg-accent-soft", props.onDeleteConversation && "pr-12")}
             role="status"
           >
-            <HistoryTitle title={pending.title} selected={pending.id === props.pendingChat?.id} running />
-            <div className="mt-1 flex items-center gap-1.5 text-[12px] text-accent/75">
-              <Database aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{pending.database ?? "Choosing a database…"}</span>
+            <HistoryAvatarPlaceholder className="h-8 w-8 shrink-0 rounded-full bg-hover" />
+            <div className="min-w-0 flex-1">
+              <HistoryTitle title={pending.title} selected={pending.id === props.pendingChat?.id} running />
+              <div className="mt-1 flex items-center gap-1.5 text-[12px] text-accent/75">
+                <Database aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{pending.database ?? "Choosing a database…"}</span>
+              </div>
             </div>
           </div>
         ))}
@@ -180,22 +184,25 @@ export function HomeSidebar(props: {
             <div
               key={item.key}
               className={cn(
-                "group flex items-start gap-2 rounded-xl px-3 py-2.5 transition-colors",
+                "group flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors",
                 selected ? "bg-accent-soft" : "hover:bg-hover",
               )}
             >
               <button
                 onClick={() => props.onOpen(item.latest.id)}
-                className="min-w-0 flex-1 text-left"
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
               >
-                <HistoryTitle title={c.summary ?? c.title} selected={selected} running={running} />
-                <div className={cn("mt-1 flex items-center gap-1.5 text-[12px]", selected ? "text-accent/75" : "text-faint")}>
-                  <DialectIcon dialect={c.source?.engine ?? inferDataEngine(c.database)} className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">
-                    {c.database}
-                    {c.databases.length > 1 ? ` +${c.databases.length - 1}` : ""}
+                <HistoryAvatar seed={item.key} className="h-8 w-8 shrink-0 text-muted" />
+                <span className="block min-w-0 flex-1">
+                  <HistoryTitle title={c.summary ?? c.title} selected={selected} running={running} />
+                  <span className={cn("mt-1 flex items-center gap-1.5 text-[12px]", selected ? "text-accent/75" : "text-faint")}>
+                    <DialectIcon dialect={c.source?.engine ?? inferDataEngine(c.database)} className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">
+                      {c.database}
+                      {c.databases.length > 1 ? ` +${c.databases.length - 1}` : ""}
+                    </span>
                   </span>
-                </div>
+                </span>
               </button>
               {props.onDeleteConversation && (
                 <button
@@ -206,7 +213,7 @@ export function HomeSidebar(props: {
                     event.stopPropagation();
                     item.conversations.forEach((conversation) => props.onDeleteConversation?.(conversation.id));
                   }}
-                  className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint opacity-0 transition hover:bg-danger-soft hover:text-danger group-hover:opacity-100"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint opacity-0 transition hover:bg-danger-soft hover:text-danger group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
