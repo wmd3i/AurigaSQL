@@ -61,7 +61,6 @@ const TOOL_GROUP_ITEM_GAP = 8;
 const DEFAULT_THREAD_FOCUS = { padding: 0.38, maxZoom: 0.9, upperBias: 0 };
 const THREAD_FOCUS = { padding: 0.3, maxZoom: 1, upperBias: 0 };
 const NODE_FOCUS = { padding: 0.48, maxZoom: 1, upperBias: 0.18 };
-const DEFAULT_FIT_VIEW = { padding: DEFAULT_THREAD_FOCUS.padding, maxZoom: DEFAULT_THREAD_FOCUS.maxZoom };
 
 type CanvasNode = CardNode | FloatingDraftNodeT;
 type LeftPanel = "threads" | "schema" | "data" | null;
@@ -390,7 +389,6 @@ function CanvasInner(props: {
   const [nodes, setNodes] = useNodesState<CanvasNode>([]);
   const nodesRef = useRef<CanvasNode[]>([]);
   const [nodeHeights, setNodeHeights] = useState<Record<string, number>>({});
-  const baseCardPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const manualCardPositionIdsRef = useRef<Set<string>>(new Set());
   const rf = useReactFlow();
   const nodesInitialized = useNodesInitialized();
@@ -618,9 +616,10 @@ function CanvasInner(props: {
   function getFloatingDraftPosition() {
     const viewport = rf.getViewport();
     const sidebarSpace = leftChromeWidth;
-    const hostRect = canvasHostRef.current?.getBoundingClientRect();
-    const viewportWidth = hostRect?.width ?? window.innerWidth;
-    const viewportHeight = hostRect?.height ?? window.innerHeight;
+    // Layout dimensions stay stable while the canvas entrance animates its scale.
+    const host = canvasHostRef.current;
+    const viewportWidth = host?.clientWidth || window.innerWidth;
+    const viewportHeight = host?.clientHeight || window.innerHeight;
     const chromePaddingX = props.embedded ? 88 : 120;
     const chromePaddingY = props.embedded ? 88 : 120;
     const visibleWidth = Math.max(420, viewportWidth - sidebarSpace - rightChromeWidth - chromePaddingX);
@@ -878,9 +877,10 @@ function CanvasInner(props: {
       }
 
       const sidebarSpace = leftChromeWidth;
-      const hostRect = canvasHostRef.current?.getBoundingClientRect();
-      const viewportWidth = hostRect?.width ?? window.innerWidth;
-      const viewportHeight = hostRect?.height ?? window.innerHeight;
+      // Layout dimensions stay stable while the canvas entrance animates its scale.
+      const host = canvasHostRef.current;
+      const viewportWidth = host?.clientWidth || window.innerWidth;
+      const viewportHeight = host?.clientHeight || window.innerHeight;
       const chromePaddingX = props.embedded ? 88 : 120;
       const chromePaddingY = props.embedded ? 88 : 120;
       const visibleWidth = Math.max(360, viewportWidth - sidebarSpace - rightChromeWidth - chromePaddingX);
@@ -912,6 +912,12 @@ function CanvasInner(props: {
     [leftChromeWidth, props.embedded, rf, rightChromeWidth],
   );
 
+  // Entry and the Fit button must use the same nodes and viewport options.
+  const fitCanvasView = useCallback(() => {
+    const ids = rf.getNodes().filter((node) => !node.hidden).map((node) => node.id);
+    focusCanvasNodes(ids, { padding: 0.2, maxZoom: 1, upperBias: 0, duration: 320 });
+  }, [focusCanvasNodes, rf]);
+
   const focusedCanvasThreadId = focusThreadId ?? props.activeId ?? null;
   // Center the initial composer after React Flow has measured its actual size.
   useEffect(() => {
@@ -924,22 +930,13 @@ function CanvasInner(props: {
     return () => cancelAnimationFrame(frame);
   }, [floatingDrafts, focusedCanvasThreadId, focusCanvasNodes, nodesInitialized]);
 
-  const focusedThreadNodeIds = useMemo(
-    () =>
-      focusedCanvasThreadId
-        ? nodes.filter((n) => n.id.startsWith(`${focusedCanvasThreadId}:`) && n.type === "card").map((n) => n.id)
-        : [],
-    [focusedCanvasThreadId, nodes],
-  );
-  const focusedThreadSignature = useMemo(
-    () => focusedThreadNodeIds.map((id) => `${id}:${nodeHeights[id] ?? "pending"}`).join("|"),
-    [focusedThreadNodeIds, nodeHeights],
-  );
+  // Refit after content has been measured, including sibling threads and composers.
+  // Positions are deliberately excluded so dragging cards does not trigger a refit.
+  const canvasContentSignature = nodes
+    .filter((node) => !node.hidden)
+    .map((node) => `${node.id}:${node.measured?.width ?? "pending"}:${node.measured?.height ?? "pending"}:${nodeHeights[node.id] ?? "pending"}`)
+    .join("|");
   const focusedThreadPosition = focusedCanvasThreadId ? floatingThreadPositions[focusedCanvasThreadId] : undefined;
-  const allCardNodeIds = useMemo(
-    () => nodes.filter((n) => n.type === "card").map((n) => n.id),
-    [nodes],
-  );
 
   const onCardHeightChange = useCallback((id: string, height: number) => {
     if (!Number.isFinite(height) || height <= 0) return;
@@ -1152,10 +1149,6 @@ function CanvasInner(props: {
         });
       });
 
-      baseCardPositionsRef.current = new Map(
-        [...autoCardPositions.entries()].map(([id, position]) => [id, { ...position }]),
-      );
-
       return out;
     });
   }, [
@@ -1228,17 +1221,17 @@ function CanvasInner(props: {
   }, [allConversationById, branchDrafts, ordered, threadNodes]);
 
   useEffect(() => {
-    if (!focusedCanvasThreadId || !nodesInitialized || focusedThreadNodeIds.length === 0) return;
-    const activeFocusKey = `${focusedCanvasThreadId}:${focusedThreadSignature}:${focusedThreadPosition?.x}:${focusedThreadPosition?.y}:${leftChromeWidth}:${rightChromeWidth}`;
+    if (!nodesInitialized || !canvasContentSignature) return;
+    const activeFocusKey = `${focusedCanvasThreadId}:${canvasContentSignature}:${focusedThreadPosition?.x}:${focusedThreadPosition?.y}:${leftChromeWidth}:${rightChromeWidth}`;
     if (lastActiveFocusRef.current === activeFocusKey) return;
     // Controlled node positions are synchronized to React Flow after render.
     // Fit only after that commit, including the draft's final spawn position.
     const frame = requestAnimationFrame(() => {
       lastActiveFocusRef.current = activeFocusKey;
-      focusCanvasNodes(focusedThreadNodeIds, { ...THREAD_FOCUS, duration: 420 });
+      fitCanvasView();
     });
     return () => cancelAnimationFrame(frame);
-  }, [focusCanvasNodes, focusedCanvasThreadId, focusedThreadNodeIds, focusedThreadSignature, focusedThreadPosition, leftChromeWidth, nodesInitialized, rightChromeWidth]);
+  }, [fitCanvasView, focusedCanvasThreadId, canvasContentSignature, focusedThreadPosition, leftChromeWidth, nodesInitialized, rightChromeWidth]);
 
   const onNodeClick: NodeMouseHandler<CanvasNode> = (_, node) => {
     if (node.type !== "card") return;
@@ -1264,37 +1257,6 @@ function CanvasInner(props: {
     setLeftPanel(null);
     const ids = nodes.filter((n) => n.id.startsWith(`${id}:`)).map((n) => n.id);
     focusCanvasNodes(ids, { ...THREAD_FOCUS, duration: 400 });
-  }
-
-  function resetThreadLayout() {
-    const basePositions = baseCardPositionsRef.current;
-    if (basePositions.size === 0) return;
-
-    manualCardPositionIdsRef.current.clear();
-    setNodes((current) =>
-      current.map((node) => {
-        if (!isCardNode(node)) return node;
-        const base = basePositions.get(node.id);
-        if (!base) return node;
-        return {
-          ...node,
-          position: { ...base },
-        };
-      }),
-    );
-
-    requestAnimationFrame(() => {
-      const fitOpts = props.embedded
-        ? { padding: 0.22, minZoom: 0.6, maxZoom: 0.9, upperBias: 0, duration: 320 }
-        : { ...THREAD_FOCUS, duration: 320 };
-      if (focusedThreadNodeIds.length > 0) {
-        focusCanvasNodes(focusedThreadNodeIds, fitOpts);
-      } else if (allCardNodeIds.length > 0) {
-        void rf.fitView({ nodes: allCardNodeIds.map((id) => ({ id })), duration: 320, ...DEFAULT_FIT_VIEW });
-      } else {
-        void rf.fitView({ duration: 320, ...DEFAULT_FIT_VIEW });
-      }
-    });
   }
 
   function focusNode(canvasId: string) {
@@ -1637,7 +1599,7 @@ function CanvasInner(props: {
                 <button
                   aria-label="Fit view"
                   title="Fit view"
-                  onClick={resetThreadLayout}
+                  onClick={fitCanvasView}
                   className="rounded-lg p-1 text-muted transition-colors hover:bg-hover hover:text-ink"
                 >
                   <Scan className={props.embedded ? "h-3.5 w-3.5" : "h-4 w-4"} />
