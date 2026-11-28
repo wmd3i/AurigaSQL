@@ -13,7 +13,7 @@ export type ConversationStatus =
   | "error";
 export type QueryMode = "agent" | "workspace";
 export const CHAT_START_NAVIGATION = Symbol("chat startup navigation");
-export type CanvasBranchKind = "follow_up" | "fork";
+export type CanvasBranchSide = "left" | "right" | "below";
 
 export type Conversation = {
   id: string; // backend task_id
@@ -24,7 +24,8 @@ export type Conversation = {
   canvasWorkId: string | null; // groups all runs/cards that belong to one canvas work/session
   parentThreadId: string | null; // branch threads: which conversation they forked from
   parentNodeId: string | null; // branch threads: which card inside the parent thread they forked from
-  canvasBranchKind?: CanvasBranchKind;
+  canvasBranchSide?: CanvasBranchSide; // which side of the parent card the branch was started from
+  parentAnchorError?: boolean; // started from the parent thread's Error card (parentNodeId is its last real card)
   canvasTone?: CanvasToneId;
   title: string; // the user's first query, verbatim — never truncate here (echo dedupe + root node depend on it)
   summary: string | null; // short AI-generated title for the sidebar (falls back to title)
@@ -91,7 +92,8 @@ export type Action =
       canvasWorkId?: string | null;
       parentThreadId?: string | null;
       parentNodeId?: string | null;
-      canvasBranchKind?: CanvasBranchKind;
+      canvasBranchSide?: CanvasBranchSide;
+      parentAnchorError?: boolean;
       canvasTone?: CanvasToneId;
       canvasScope?: CanvasScope;
       preserveView?: boolean;
@@ -109,7 +111,8 @@ export type Action =
       canvasWorkId?: string | null;
       parentThreadId: string;
       parentNodeId: string;
-      canvasBranchKind?: CanvasBranchKind;
+      canvasBranchSide?: CanvasBranchSide;
+      parentAnchorError?: boolean;
       canvasTone?: CanvasToneId;
       canvasScope?: CanvasScope;
     }

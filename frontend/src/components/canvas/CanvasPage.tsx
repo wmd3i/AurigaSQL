@@ -978,7 +978,7 @@ function CanvasInner(props: {
             placeholder: draft.kind === "fork" ? "Explore a parallel direction..." : "Ask a follow-up from this card...",
             onOpenLlmConfig: props.onOpenLlmConfig,
             onSubmit: async (text: string, toneId: CanvasToneId) => {
-              const started = await startCanvasQuestion(text, { ...draft.target, branchKind: draft.kind }, toneId);
+              const started = await startCanvasQuestion(text, { ...draft.target, side: draft.kind === "follow_up" ? "below" : "right" }, toneId);
               if (!started) return false;
               setBranchDrafts((currentDrafts) => currentDrafts.filter((item) => item.id !== draft.id));
               setSelectedBranchDraftId((current) => (current === draft.id ? null : current));
@@ -1005,7 +1005,7 @@ function CanvasInner(props: {
           parentForCanvasNode && conv.parentNodeId
             ? threadNodes(parentForCanvasNode).find((node) => node.id === conv.parentNodeId) ?? null
             : null;
-        const branchOrigin = parentAnchorNode ? { label: cardLabel(parentAnchorNode), kind: conv.canvasBranchKind } : null;
+        const branchOrigin = parentAnchorNode ? { label: cardLabel(parentAnchorNode), kind: conv.canvasBranchSide === "below" ? ("follow_up" as const) : ("fork" as const) } : null;
         const siblingCount = parentCanvasNodeId ? branchCounts.get(parentCanvasNodeId) ?? 1 : 0;
         const branchIndex =
           parentCanvasNodeId && siblingCount > 0
@@ -1020,7 +1020,7 @@ function CanvasInner(props: {
             : -1;
         const floatingPosition =
           !parentCanvasNodeId ? floatingThreadPositions[conv.id] : undefined;
-        const isFollowUpBranch = conv.canvasBranchKind === "follow_up";
+        const isFollowUpBranch = conv.canvasBranchSide === "below";
         const parentWidth = parentNode ? cardWidth(parentNode.data.tn) : CARD_W;
         const parentHeight = parentNode
           ? nodeHeights[parentNode.id] ?? estimateHeight(parentNode.data.tn)
@@ -1103,7 +1103,7 @@ function CanvasInner(props: {
                           tn.kind === "question" || (tn.kind === "answer" && conv.parentThreadId === null)
                             ? "auto"
                             : "manual",
-                        branchKind: kind,
+                        side: kind === "follow_up" ? "below" : "right",
                       }, kind)
                   : undefined,
               onRevert:

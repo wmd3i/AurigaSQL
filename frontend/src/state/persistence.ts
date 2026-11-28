@@ -1,5 +1,5 @@
 import { buildTimeline, type RawAgentEvent } from "../lib/buildTimeline";
-import { initialState, type AppState, type CanvasScope, type Conversation, type QueryMode } from "./types";
+import { initialState, type AppState, type CanvasBranchSide, type CanvasScope, type Conversation, type QueryMode } from "./types";
 import { inferDataEngine, normalizeDataEngine } from "../lib/databaseEngine";
 import type { DataSource } from "../api/bff";
 import { CANVAS_TONES, type CanvasToneId } from "../lib/canvasTones";
@@ -73,6 +73,17 @@ function readSource(value: unknown, fallbackDatabase: string): DataSource | unde
   };
 }
 
+/** Branch side of a stored thread. Older data stored `canvasBranchKind`
+ *  ("follow_up" → below, "fork" → right); branches with neither (sub-tool
+ *  branches never set one) were drawn on the right. */
+export function readBranchSide(record: Record<string, unknown>): CanvasBranchSide | undefined {
+  if (record.canvasBranchSide === "left" || record.canvasBranchSide === "right" || record.canvasBranchSide === "below") {
+    return record.canvasBranchSide;
+  }
+  if (typeof record.parentThreadId !== "string") return undefined;
+  return record.canvasBranchKind === "follow_up" ? "below" : "right";
+}
+
 function readConversation(value: unknown): Conversation | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
@@ -99,10 +110,8 @@ function readConversation(value: unknown): Conversation | null {
     canvasWorkId: typeof record.canvasWorkId === "string" ? record.canvasWorkId : null,
     parentThreadId: typeof record.parentThreadId === "string" ? record.parentThreadId : null,
     parentNodeId: typeof record.parentNodeId === "string" ? record.parentNodeId : null,
-    canvasBranchKind:
-      record.canvasBranchKind === "follow_up" || record.canvasBranchKind === "fork"
-        ? record.canvasBranchKind
-        : undefined,
+    canvasBranchSide: readBranchSide(record),
+    parentAnchorError: record.parentAnchorError === true ? true : undefined,
     canvasTone: isCanvasTone(record.canvasTone) ? record.canvasTone : undefined,
     title: record.title,
     summary: typeof record.summary === "string" ? record.summary : null,
