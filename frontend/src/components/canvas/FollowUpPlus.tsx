@@ -58,18 +58,19 @@ export function FollowUpPlus(props: {
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={cn("nodrag nopan absolute z-30 flex", POSITION[props.side])}
+      // "group" on the button lets its own keyboard focus reveal the plus, like hovering the card does.
+      className={cn("nodrag nopan group absolute z-30 flex rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent", POSITION[props.side])}
     >
       {count > 0 ? (
         <>
-          <span className={cn(BADGE, props.selected ? "hidden" : cn("flex", hover.hide))}>{count}</span>
-          <span className={cn(RING, "h-[26px] gap-0.5 px-2 text-[11px] font-semibold", props.selected ? "flex" : cn("hidden", hover.flex))}>
+          <span className={cn(BADGE, props.selected ? "hidden" : cn("flex group-focus-visible:hidden", hover.hide))}>{count}</span>
+          <span className={cn(RING, "h-[26px] gap-0.5 px-2 text-[11px] font-semibold", props.selected ? "flex" : cn("hidden group-focus-visible:flex", hover.flex))}>
             <Plus className="h-3 w-3" strokeWidth={2.6} aria-hidden="true" />
             {count}
           </span>
         </>
       ) : (
-        <span className={cn(RING, "flex h-[26px] w-[26px] transition-opacity", !props.selected && cn("opacity-0", hover.show))}>
+        <span className={cn(RING, "flex h-[26px] w-[26px] transition-opacity", !props.selected && cn("opacity-0 group-focus-visible:opacity-100", hover.show))}>
           <Plus className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
         </span>
       )}

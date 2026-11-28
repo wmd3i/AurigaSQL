@@ -86,6 +86,20 @@ function SideHandles(props: { targetStyle?: CSSProperties; sourceStyle?: CSSProp
   );
 }
 
+/** The left / right / bottom plus buttons of a card (positioned against the nearest relative parent). */
+function CardFollowUpPluses({ data, selected }: { data: CardData; selected: boolean }) {
+  const sides = data.followUpSides;
+  const onFollowUp = data.onFollowUp;
+  if (!sides || !onFollowUp) return null;
+  return (
+    <>
+      <FollowUpPlus side="left" available={sides.left} selected={selected} count={data.branchCounts?.left} onClick={() => onFollowUp("left")} />
+      <FollowUpPlus side="right" available={sides.right} selected={selected} count={data.branchCounts?.right} onClick={() => onFollowUp("right")} />
+      <FollowUpPlus side="bottom" available={sides.below} selected={selected} onClick={() => onFollowUp("below")} />
+    </>
+  );
+}
+
 function ExpandableClamp(props: { children: ReactNode; collapsedHeight?: number }) {
   const { children, collapsedHeight = 320 } = props;
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -719,8 +733,9 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
 
   if (tn.kind === "error") {
     return (
-      <div ref={rootRef} className="relative">
+      <div ref={rootRef} className="nopan group relative">
         <SideHandles />
+        <CardFollowUpPluses data={data} selected={Boolean(selected)} />
         <div className="w-[320px] rounded-2xl border border-danger bg-danger-soft px-4 py-3 shadow-sm">
           <div className="mb-1 flex items-center gap-1">
             <CardCopyButton card={tn} compact={compact} />
@@ -928,13 +943,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
           </>
         )}
       </div>
-        {data.followUpSides && data.onFollowUp && (
-          <>
-            <FollowUpPlus side="left" available={data.followUpSides.left} selected={Boolean(selected)} count={data.branchCounts?.left} onClick={() => data.onFollowUp?.("left")} />
-            <FollowUpPlus side="right" available={data.followUpSides.right} selected={Boolean(selected)} count={data.branchCounts?.right} onClick={() => data.onFollowUp?.("right")} />
-            <FollowUpPlus side="bottom" available={data.followUpSides.below} selected={Boolean(selected)} onClick={() => data.onFollowUp?.("below")} />
-          </>
-        )}
+        <CardFollowUpPluses data={data} selected={Boolean(selected)} />
         {tn.kind === "tool_group" && !detailsOpen && (data.toolFollowUp?.total ?? 0) > 0 && (
           <FollowUpPlus side="right" available={false} selected={false} count={data.toolFollowUp?.total} onClick={() => {}} />
         )}

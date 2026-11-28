@@ -32,4 +32,11 @@ describe("FollowUpPlus", () => {
     expect(html).not.toContain("<button");
     expect(html).toContain(">3<");
   });
+
+  it("becomes visible when reached with the keyboard", () => {
+    const plus = renderToStaticMarkup(<FollowUpPlus side="right" available selected={false} onClick={noop} />);
+    expect(plus).toContain("group-focus-visible:opacity-100");
+    const pill = renderToStaticMarkup(<FollowUpPlus side="right" count={2} available selected={false} onClick={noop} />);
+    expect(pill).toContain("group-focus-visible:flex");
+  });
 });

@@ -714,10 +714,11 @@ function CanvasInner(props: {
     setExpandAllToken((current) => current + 1);
   }
 
-  /** Anchor canvas id → committed branches per side, in canvas order. */
+  /** Anchor canvas id → committed branches, oldest first, so a new branch never moves the ones above it. */
   const branchesByAnchor = useMemo(() => {
     const out = new Map<string, Array<{ id: string; side: CanvasBranchSide; parentNodeId: string }>>();
-    visibleConversations.forEach((conv) => {
+    // visibleConversations is newest-first (the reducer prepends); sibling slots must be oldest-first.
+    [...visibleConversations].sort((a, b) => a.createdAt - b.createdAt).forEach((conv) => {
       const key = branchAnchorCanvasId(conv, conv.parentThreadId ? allConversationById.get(conv.parentThreadId) : undefined, threadNodes);
       if (!key || !conv.parentNodeId) return;
       out.set(key, [...(out.get(key) ?? []), { id: conv.id, side: conv.canvasBranchSide ?? "right", parentNodeId: conv.parentNodeId }]);
@@ -750,7 +751,22 @@ function CanvasInner(props: {
       const sameSide =
         (branchesByAnchor.get(parentCanvasNodeId) ?? []).filter((branch) => branch.side === side).length +
         branchDrafts.filter((draft) => draft.parentCanvasNodeId === parentCanvasNodeId && draft.side === side).length;
-      const position = branchPosition(side, parentRect, FLOATING_DRAFT_W, sameSide, DRAFT_BELOW_GAP_Y);
+      const slot = branchPosition(side, parentRect, FLOATING_DRAFT_W, sameSide, DRAFT_BELOW_GAP_Y);
+      // Like committed threads, a draft moves down past cards already in its column (e.g. an earlier follow-up's cards).
+      const blockers = nodesRef.current.flatMap((node) => {
+        if (node.type !== "card") return [];
+        const card = node as CardNode;
+        return [{
+          top: card.position.y,
+          bottom: card.position.y + (nodeHeights[card.id] ?? estimateHeight(card.data.tn)),
+          left: card.position.x,
+          right: card.position.x + cardWidth(card.data.tn),
+        }];
+      });
+      const position = {
+        x: slot.x,
+        y: resolveCanvasRowY(slot.y, FLOATING_DRAFT_H, BRANCH_GAP_Y, slot.x, slot.x + FLOATING_DRAFT_W, blockers),
+      };
       const draft: BranchDraft = {
         id: `branch-draft:${side}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
         ...position,
