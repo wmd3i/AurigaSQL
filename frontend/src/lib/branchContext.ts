@@ -94,7 +94,7 @@ export function branchContextCards(conversations: Conversation[], target: Branch
 const TRUNCATION_SUFFIX = "\n...[truncated for branch context]";
 
 function threadHeader(conv: Pick<Conversation, "id" | "database" | "title">): string {
-  return [`Thread ${conv.id}`, `Database: ${conv.database}`, `Original user query: ${conv.title}`].join("\n");
+  return [`Thread ${conv.id}`, `Database: ${conv.database}`, `Original user query: ${compactForBranchContext(conv.title)}`].join("\n");
 }
 
 function cardText(card: BranchContextCard): string {
@@ -124,7 +124,7 @@ export function buildBranchParentContext(
     "Treat the next user message as a follow-up question from that exact branch anchor, not as an unrelated new task. Use the compact parent-thread transcript below as prior conversation context. Continue from the branch anchor and preserve user intent, assumptions, SQL exploration, tool results, and clarifications. Re-fetch schema or knowledge if the compact context is insufficient.",
     "",
   ].join("\n");
-  const errorLine = target.anchorError ? `Thread ended with error: ${parent?.error ?? "error"}` : null;
+  const errorLine = target.anchorError ? `Thread ended with error: ${compactForBranchContext(parent?.error ?? "error")}` : null;
   const texts = cards.map(cardText);
   const anchorIndex = cards.length - 1;
 

@@ -113,6 +113,21 @@ describe("buildBranchParentContext", () => {
     expect(text).toContain("[Card 2: tool/execute_sql]");
   });
 
+  it("keeps the anchor card even when the error message alone exceeds the limit", () => {
+    const failed = conv("E", sqlTool("e1", "E-r1"), { status: "error", error: "z".repeat(20000) });
+    const text = buildBranchParentContext([failed], { parentThreadId: "E", parentNodeId: "n1", label: "Error", anchorError: true })!;
+    expect(text.length).toBeLessThanOrEqual(14000);
+    expect(text).toContain("[Card 2: tool/execute_sql]");
+    expect(text).toContain("E-r1");
+  });
+
+  it("keeps the anchor card even when the original question alone exceeds the limit", () => {
+    const longTitle = conv("T", sqlTool("t1", "T-r1"), { title: "q".repeat(20000) });
+    const text = buildBranchParentContext([longTitle], { parentThreadId: "T", parentNodeId: "n1", label: "x" })!;
+    expect(text.length).toBeLessThanOrEqual(14000);
+    expect(text).toContain("T-r1");
+  });
+
   it("returns undefined without a target", () => {
     expect(buildBranchParentContext([threadA], null)).toBeUndefined();
   });
