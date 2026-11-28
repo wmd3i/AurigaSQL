@@ -62,6 +62,8 @@ const MAX_LEFT_PANEL_H = 980;
 const CARD_W = 320;
 const FLOATING_DRAFT_W = 360;
 const FLOATING_DRAFT_H = 178;
+/** A follow-up draft is taller than a plain one: it adds the "From … · includes N earlier cards" line (measured ~287px). */
+const BRANCH_DRAFT_H = 290;
 const ANSWER_CARD_W = 560;
 const TOOL_GROUP_BUTTON_W = 320;
 const TOOL_GROUP_CARD_W = 704;
@@ -782,7 +784,7 @@ function CanvasInner(props: {
       });
       const position = {
         x: slot.x,
-        y: resolveCanvasRowY(slot.y, FLOATING_DRAFT_H, BRANCH_GAP_Y, slot.x, slot.x + FLOATING_DRAFT_W, blockers),
+        y: resolveCanvasRowY(slot.y, BRANCH_DRAFT_H, BRANCH_GAP_Y, slot.x, slot.x + FLOATING_DRAFT_W, blockers),
       };
       const draft: BranchDraft = {
         id: `branch-draft:${side}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
@@ -1098,6 +1100,15 @@ function CanvasInner(props: {
             rowX,
             rowX + cardWidth(tn),
             out.flatMap((node) => {
+              // Follow-up drafts block too, so a thread that re-lays out never lands on a draft being written.
+              if (node.type === "floatingDraft" && node.id.startsWith("branch-draft:")) {
+                return [{
+                  top: node.position.y,
+                  bottom: node.position.y + BRANCH_DRAFT_H,
+                  left: node.position.x,
+                  right: node.position.x + FLOATING_DRAFT_W,
+                }];
+              }
               if (node.type !== "card") return [];
               const blockerTop = node.position.y;
               return [{
