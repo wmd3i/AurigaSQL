@@ -94,7 +94,9 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
 
   return (
     <div className="group relative w-[360px] pt-[56px]">
-      <Handle type="target" position={Position.Top} className="!h-1 !w-1 !border-0 !bg-transparent" />
+      <Handle id="top" type="target" position={Position.Top} className="!h-1 !w-1 !border-0 !bg-transparent" isConnectable={false} />
+      <Handle id="left" type="target" position={Position.Left} className="!h-1 !w-1 !border-0 !bg-transparent" isConnectable={false} />
+      <Handle id="right" type="target" position={Position.Right} className="!h-1 !w-1 !border-0 !bg-transparent" isConnectable={false} />
       <div
         className={cn(
           "nodrag nopan absolute left-1/2 top-0 z-30 flex -translate-x-1/2 items-center gap-2 rounded-[18px] border border-line/80 bg-card px-2.5 py-1.5 text-[13px] font-semibold text-ink shadow-[0_12px_28px_rgba(15,23,42,0.12)] transition-all",
@@ -207,7 +209,7 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
         {waitNotice && <p role="status" className="mt-2 text-[12px] leading-4 text-muted">{waitNotice}</p>}
         {error && <p role="alert" className="mt-2 text-[12px] leading-4 text-danger">{error}</p>}
       </div>
-      <Handle type="source" position={Position.Bottom} className="!h-1 !w-1 !border-0 !bg-transparent" />
+      <Handle id="bottom" type="source" position={Position.Bottom} className="!h-1 !w-1 !border-0 !bg-transparent" isConnectable={false} />
     </div>
   );
 }

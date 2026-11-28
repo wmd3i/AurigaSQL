@@ -39,6 +39,7 @@ import {
   BRANCH_GAP_Y,
   BRANCH_MIN_X_OFFSET,
   BRANCH_X_PADDING,
+  branchHandles,
   branchPosition,
   resolveAnchorCanvasId,
   sideSiblingIndex,
@@ -209,6 +210,13 @@ function branchAnchorCanvasId(
     { parentNodeId: conv.parentNodeId, parentAnchorError: conv.parentAnchorError },
     (nodeId) => canvasNodeIdForThreadNode(parent.id, groups, nodeId),
   );
+}
+
+/** The sub-tool a branch hangs from when it was started inside a tool group. */
+function branchSubToolId(conv: Conversation, parent: Conversation | undefined, threadNodes: (conv: Conversation) => CardContent[]): string | undefined {
+  if (!parent || !conv.parentNodeId || conv.parentAnchorError) return undefined;
+  const group = buildThreadGroups(threadNodes(parent)).find((item) => item.nodes.some((node) => node.id === conv.parentNodeId));
+  return group && groupCardContent(group.nodes).kind === "tool_group" ? conv.parentNodeId : undefined;
 }
 
 function opensInspector(tn: CardContent) {
@@ -1167,6 +1175,7 @@ function CanvasInner(props: {
     const es: Edge[] = [];
     const solid = { stroke: "var(--accent)", strokeWidth: 1.5, opacity: 0.55 };
     const dashed = { strokeDasharray: "6 6", stroke: "var(--line)", strokeWidth: 1.5 };
+    const draftEdge = { strokeDasharray: "6 6", stroke: "var(--accent)", strokeWidth: 1.5, opacity: 0.55 };
 
     ordered.forEach((conv) => {
       const groups = buildThreadGroups(threadNodes(conv));
@@ -1174,16 +1183,18 @@ function CanvasInner(props: {
 
       if (conv.parentThreadId && conv.parentNodeId) {
         const parent = allConversationById.get(conv.parentThreadId);
-        const sourceId = parent
-          ? canvasNodeIdForThreadNode(conv.parentThreadId, buildThreadGroups(threadNodes(parent)), conv.parentNodeId)
-          : `${conv.parentThreadId}:${conv.parentNodeId}`;
+        const sourceId = branchAnchorCanvasId(conv, parent, threadNodes);
+        const subToolId = branchSubToolId(conv, parent, threadNodes);
         const targetNode = groupCardContent(groups[0].nodes);
-        es.push({
-          id: `e:branch:${conv.parentThreadId}:${conv.parentNodeId}:${conv.id}:${targetNode.id}`,
-          source: sourceId,
-          target: `${conv.id}:${targetNode.id}`,
-          style: solid,
-        });
+        if (sourceId) {
+          es.push({
+            id: `e:branch:${conv.parentThreadId}:${conv.parentNodeId}:${conv.id}:${targetNode.id}`,
+            source: sourceId,
+            target: `${conv.id}:${targetNode.id}`,
+            ...branchHandles(conv.canvasBranchSide ?? "right", subToolId ? { toolId: subToolId, groupOpen: true } : undefined),
+            style: solid,
+          });
+        }
       }
 
       for (let i = 0; i < groups.length - 1; i++) {
@@ -1193,6 +1204,8 @@ function CanvasInner(props: {
           id: `${conv.id}:e:${sourceNode.id}:${targetNode.id}`,
           source: `${conv.id}:${sourceNode.id}`,
           target: `${conv.id}:${targetNode.id}`,
+          sourceHandle: "bottom",
+          targetHandle: "top",
           style: dashed,
         });
       }
@@ -1203,7 +1216,8 @@ function CanvasInner(props: {
         id: `e:draft:${draft.parentCanvasNodeId}:${draft.id}`,
         source: draft.parentCanvasNodeId,
         target: draft.id,
-        style: draft.kind === "fork" ? solid : dashed,
+        ...branchHandles(draft.kind === "follow_up" ? "below" : "right"),
+        style: draftEdge,
       });
     });
 

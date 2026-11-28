@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import {
   ArrowUp,
@@ -60,6 +60,23 @@ export type CardData = {
 };
 
 export type CardNode = Node<CardData, "card">;
+
+const HANDLE_CLASS = "!h-1 !w-1 !border-0 !bg-transparent";
+
+/** Invisible edge anchors. Within-thread edges use top/bottom; follow-up edges
+ *  leave from the side they were started on and enter the facing side. */
+function SideHandles(props: { targetStyle?: CSSProperties; sourceStyle?: CSSProperties }) {
+  return (
+    <>
+      <Handle id="top" type="target" position={Position.Top} style={props.targetStyle} className={HANDLE_CLASS} isConnectable={false} />
+      <Handle id="left" type="target" position={Position.Left} className={HANDLE_CLASS} isConnectable={false} />
+      <Handle id="right" type="target" position={Position.Right} className={HANDLE_CLASS} isConnectable={false} />
+      <Handle id="left" type="source" position={Position.Left} className={HANDLE_CLASS} isConnectable={false} />
+      <Handle id="right" type="source" position={Position.Right} className={HANDLE_CLASS} isConnectable={false} />
+      <Handle id="bottom" type="source" position={Position.Bottom} style={props.sourceStyle} className={HANDLE_CLASS} isConnectable={false} />
+    </>
+  );
+}
 
 function branchOriginText(branchOrigin: NonNullable<CardData["branchOrigin"]>): string {
   if (branchOrigin.kind === "fork") {
@@ -469,6 +486,20 @@ function ToolGroupCard(props: {
         <ChevronRight className={cn("h-3 w-3 shrink-0 transition-transform", props.open && "rotate-180")} />
       </button>
 
+      {/* Follow-up edges from sub-tools: from the group button while collapsed, from each tool row while open. */}
+      {!props.open &&
+        props.tools.map((tool) => (
+          <Handle
+            key={tool.id}
+            id={`tool:${tool.id}`}
+            type="source"
+            position={Position.Right}
+            style={{ left: buttonWidth, right: "auto", top: buttonCenterY }}
+            className={HANDLE_CLASS}
+            isConnectable={false}
+          />
+        ))}
+
       {props.open && (
         <>
           <svg
@@ -501,6 +532,14 @@ function ToolGroupCard(props: {
                   data-tool-card-id={tool.id}
                   className="nodrag nopan group/tool relative z-10 overflow-visible rounded-2xl border border-dashed border-accent/30 bg-card/40 transition-colors hover:border-accent/50 hover:bg-card/70"
                 >
+                  <Handle
+                    id={`tool:${tool.id}`}
+                    type="source"
+                    position={Position.Right}
+                    style={{ top: itemHeight / 2 }}
+                    className={HANDLE_CLASS}
+                    isConnectable={false}
+                  />
                   <div className="flex items-center pl-3">
                   <CardCopyButton card={tool} />
                   <button
@@ -734,7 +773,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
     const canRestartBackend = Boolean(window.aurigaDesktop?.restartBackend);
     return (
       <div ref={rootRef} className="relative">
-        <Handle type="target" position={Position.Top} className="!h-1 !w-1 !border-0 !bg-transparent" />
+        <Handle id="top" type="target" position={Position.Top} className={HANDLE_CLASS} isConnectable={false} />
         <div className="w-[340px] rounded-2xl border border-dashed border-accent/50 bg-card px-4 py-3 text-[13px] text-muted shadow-sm">
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin text-accent" />
@@ -774,7 +813,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
             </div>
           )}
         </div>
-        <Handle type="source" position={Position.Bottom} className="!h-1 !w-1 !border-0 !bg-transparent" />
+        <Handle id="bottom" type="source" position={Position.Bottom} className={HANDLE_CLASS} isConnectable={false} />
       </div>
     );
   }
@@ -782,7 +821,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
   if (tn.kind === "error") {
     return (
       <div ref={rootRef} className="relative">
-        <Handle type="target" position={Position.Top} className="!h-1 !w-1 !border-0 !bg-transparent" />
+        <SideHandles />
         <div className="w-[320px] rounded-2xl border border-danger bg-danger-soft px-4 py-3 shadow-sm">
           <div className="mb-1 flex items-center gap-1">
             <CardCopyButton card={tn} compact={compact} />
@@ -792,19 +831,13 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
             {tn.body}
           </pre>
         </div>
-        <Handle type="source" position={Position.Bottom} className="!h-1 !w-1 !border-0 !bg-transparent" />
       </div>
     );
   }
 
   return (
     <div ref={rootRef} className="nopan group relative">
-      <Handle
-        type="target"
-        position={Position.Top}
-        style={groupTargetHandleStyle}
-        className="!h-1 !w-1 !border-0 !bg-transparent"
-      />
+      <SideHandles targetStyle={groupTargetHandleStyle} sourceStyle={groupSourceHandleStyle} />
 
       {selected && ((branchable && onCreateBranchDraft) || onRevert) && (
         <div
@@ -1036,12 +1069,6 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
 
       {footer && <div className="mt-2 text-center text-[12px] text-faint">— ended —</div>}
 
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        style={groupSourceHandleStyle}
-        className="!h-1 !w-1 !border-0 !bg-transparent"
-      />
     </div>
   );
 }
