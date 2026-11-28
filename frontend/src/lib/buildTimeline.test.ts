@@ -73,3 +73,37 @@ describe("buildTimeline", () => {
     expect(buildTimeline([])).toEqual([]);
   });
 });
+
+
+describe("clarification bridge", () => {
+  it("deduplicates delayed trajectory ask calls and preserves the accepted answer", () => {
+    const timeline = buildTimeline([
+      { type: "clarification_request", question: "Which drivers?" },
+      { type: "clarification_answer", answer: "All drivers" },
+      { type: "tool_call", id: "ask-1", name: "ask", args: { question: "Which drivers?" } },
+      { type: "tool_result", id: "ask-1", name: "ask", result: "All drivers" },
+    ]);
+    expect(timeline).toEqual([
+      { kind: "tool_call", name: "ask_user", args: { question: "Which drivers?" } },
+      { kind: "tool_response", name: "ask_user", response: "All drivers" },
+    ]);
+  });
+  it("does not duplicate a question already streamed from the trajectory", () => {
+    const timeline = buildTimeline([
+      { type: "tool_call", id: "ask-1", name: "ask", args: { question: "Which drivers?" } },
+      { type: "clarification_request", question: "Which drivers?" },
+    ]);
+    expect(timeline).toHaveLength(1);
+  });
+});
+
+
+it("keeps one answer when trajectory streaming precedes the IPC question", () => {
+  const timeline = buildTimeline([
+    { type: "tool_call", id: "a", name: "ask", args: { question: "Which?" } },
+    { type: "clarification_request", question: "Which?" },
+    { type: "clarification_answer", answer: "All" },
+    { type: "tool_result", id: "a", name: "ask", result: "All" },
+  ]);
+  expect(timeline).toHaveLength(2);
+});

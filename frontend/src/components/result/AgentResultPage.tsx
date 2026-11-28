@@ -13,10 +13,11 @@ import {
   Sparkles,
   SlidersHorizontal,
   TriangleAlert,
-  Workflow,
   X,
 } from "lucide-react";
 import { bff, type DataSource } from "../../api/bff";
+import { conversationWorkId } from "../../lib/conversationHistory";
+import { FlowModeSwitch } from "../FlowModeSwitch";
 import { cn } from "../../lib/cn";
 import type { Conversation } from "../../state/types";
 import { buildNodes, type ThreadNode } from "../../lib/buildNodes";
@@ -161,7 +162,7 @@ function OpenClarification({ question, onAnswer }: { question: string; onAnswer:
               onClick={() => setActive(i)}
               className={cn(
                 "flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
-                active === i ? "bg-accent text-invert-ink" : "bg-card text-muted hover:bg-hover",
+                active === i ? "bg-accent text-accent-ink" : "bg-card text-muted hover:bg-hover",
               )}
             >
               Clarification {i + 1}
@@ -248,7 +249,7 @@ function ClarificationThread({
 
 /** A user turn, rendered as a right-aligned chat bubble. The database context
  *  rides along the first question only. */
-function QuestionBubble({ text, database }: { text: string; database?: string }) {
+export function QuestionBubble({ text, database }: { text: string; database?: string }) {
   return (
     <div className="flex flex-col items-end gap-1.5">
       <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-md border border-accent/20 bg-accent-soft px-4 py-2.5 text-[15px] font-medium leading-relaxed text-ink">
@@ -258,7 +259,7 @@ function QuestionBubble({ text, database }: { text: string; database?: string })
   );
 }
 
-function RunningState({ currentStep }: { currentStep: string | null }) {
+export function RunningState({ currentStep, title = "Working on your answer" }: { currentStep: string | null; title?: string }) {
   return (
     <section className="flex items-center gap-3.5 rounded-2xl border border-line bg-card px-5 py-4 shadow-sm">
       <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
@@ -268,7 +269,7 @@ function RunningState({ currentStep }: { currentStep: string | null }) {
         </span>
       </span>
       <div className="min-w-0 flex-1">
-        <p className="shimmer-text text-[14px] font-semibold">Working on your answer</p>
+        <p className="shimmer-text text-[14px] font-semibold">{title}</p>
         <p className="mt-0.5 truncate text-[13px] text-muted">
           {currentStep ? currentStep : "Exploring the database"}
         </p>
@@ -297,12 +298,15 @@ export function AgentResultPage(props: {
   onAnswer: (id: string, text: string) => void;
   onFollowUp: (database: string, query: string) => Promise<void>;
   onStop: (id: string) => void;
-  onOpenWorkspaceSetup: () => void;
   onOpenLlmConfig?: () => void;
   dataSources?: DataSource[];
 }) {
   const conv = props.conversation;
   const result = extractAgentResult(conv);
+  const workThreads = props.conversations
+    .filter((item) => conversationWorkId(props.conversations, item) === conversationWorkId(props.conversations, conv))
+    .sort((a, b) => a.createdAt - b.createdAt);
+
   // Transcript of every Q&A round so follow-ups append instead of overwriting.
   const rounds = useMemo(() => buildRounds(conv), [conv]);
   const revertNodes = useMemo(() => revertNodeIdsByRound(conv), [conv]);
@@ -565,9 +569,9 @@ export function AgentResultPage(props: {
     <div className="app-shell-bg flex h-screen w-screen overflow-hidden text-ink">
       <HomeSidebar
         conversations={props.conversations}
+        activeSection="chat"
         activeConversationId={conv.id}
         onNewFlow={props.onNewFlow}
-        onOpenWorkspaceSetup={props.onOpenWorkspaceSetup}
         onOpen={props.onOpen}
         onDeleteConversation={props.onDeleteConversation}
         dataSources={sidebarSources}
@@ -576,52 +580,60 @@ export function AgentResultPage(props: {
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        {hasProcess && (
-          <header className="flex shrink-0 border-b border-line/80 bg-transparent px-6 py-2.5">
-            <div className="mx-auto flex w-full max-w-[1480px] items-center justify-end gap-10 xl:gap-14">
-              <div className="hidden min-w-0 flex-1 xl:block xl:pr-6" />
-              <div className={cn("flex w-auto shrink-0 justify-end gap-2", headerRailWidth)}>
-                <IconHint label={toolsCardOpen ? "Hide steps" : "Show steps"}>
-                  <button
-                    onClick={() => setToolsCardOpen((v) => !v)}
-                    aria-label={toolsCardOpen ? "Hide steps" : "Show steps"}
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-2xl text-muted transition-colors",
-                      toolsCardOpen
-                        ? "bg-accent-soft text-accent"
-                        : "bg-transparent hover:border hover:border-line hover:bg-card hover:text-ink",
-                    )}
-                  >
-                    <SlidersHorizontal className="h-4 w-4" />
-                  </button>
-                </IconHint>
-                <IconHint label={processOpen ? "Hide details" : "Show details"}>
-                  <button
-                    onClick={toggleProcessPanel}
-                    aria-label={processOpen ? "Hide details" : "Show details"}
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-2xl text-muted transition-colors",
-                      processOpen
-                        ? "bg-accent-soft text-accent"
-                        : "bg-transparent hover:border hover:border-line hover:bg-card hover:text-ink",
-                    )}
-                  >
-                    {processOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
-                  </button>
-                </IconHint>
-                <IconHint label="Canvas Mode">
-                  <button
-                    onClick={props.onShowProcess}
-                    aria-label="Canvas Mode"
-                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-transparent text-muted transition-colors hover:border hover:border-line hover:bg-card hover:text-ink"
-                  >
-                    <Workflow className="h-4 w-4" />
-                  </button>
-                </IconHint>
-              </div>
+        <header className="flex shrink-0 border-b border-line/80 bg-transparent px-6 py-2.5">
+          <div className="mx-auto flex w-full max-w-[1480px] items-center justify-end gap-10 xl:gap-14">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+              <FlowModeSwitch mode="agent" onModeChange={(mode) => {
+                if (mode === "workspace") props.onShowProcess();
+              }} />
+              {workThreads.length > 1 && (
+                <select
+                  aria-label="Current thread"
+                  value={conv.id}
+                  onChange={(event) => props.onOpen(event.target.value)}
+                  className="min-w-0 max-w-[280px] rounded-xl border border-line bg-card px-3 py-2 text-[13px] text-ink"
+                >
+                  {workThreads.map((thread) => (
+                    <option key={thread.id} value={thread.id}>
+                      {thread.parentThreadId ? (thread.canvasBranchKind === "fork" ? "Fork: " : "Follow up: ") : "Thread: "}
+                      {thread.summary || thread.title}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
-          </header>
-        )}
+            {hasProcess && <div className={cn("flex w-auto shrink-0 justify-end gap-2", headerRailWidth)}>
+              <IconHint label={toolsCardOpen ? "Hide steps" : "Show steps"}>
+                <button
+                  onClick={() => setToolsCardOpen((v) => !v)}
+                  aria-label={toolsCardOpen ? "Hide steps" : "Show steps"}
+                  className={cn(
+                    "flex h-10 w-10 items-center justify-center rounded-2xl text-muted transition-colors",
+                    toolsCardOpen
+                      ? "bg-accent-soft text-accent"
+                      : "bg-transparent hover:border hover:border-line hover:bg-card hover:text-ink",
+                  )}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                </button>
+              </IconHint>
+              <IconHint label={processOpen ? "Hide details" : "Show details"}>
+                <button
+                  onClick={toggleProcessPanel}
+                  aria-label={processOpen ? "Hide details" : "Show details"}
+                  className={cn(
+                    "flex h-10 w-10 items-center justify-center rounded-2xl text-muted transition-colors",
+                    processOpen
+                      ? "bg-accent-soft text-accent"
+                      : "bg-transparent hover:border hover:border-line hover:bg-card hover:text-ink",
+                  )}
+                >
+                  {processOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />}
+                </button>
+              </IconHint>
+            </div>}
+          </div>
+        </header>
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-5">
           <div className="mx-auto flex w-full max-w-[1480px] items-start gap-10 xl:gap-14">

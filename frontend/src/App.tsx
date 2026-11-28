@@ -3,18 +3,22 @@ import { HomePage } from "./components/home/HomePage";
 import { WorkspaceSetupPage } from "./components/workspace/WorkspaceSetupPage";
 import { CanvasPage } from "./components/canvas/CanvasPage";
 import { AgentResultPage } from "./components/result/AgentResultPage";
-import { LlmConfigModal } from "./components/settings/LlmConfigModal";
-import { DataConnectionModal } from "./components/home/DataConnectionModal";
+import { SettingsModal } from "./components/settings/SettingsModal";
+import { SettingsContext, type OpenSettings, type SettingsTab } from "./state/settingsContext";
 import { reducer } from "./state/reducer";
 import { initialState, type QueryMode } from "./state/types";
 import { useChat } from "./state/useChat";
+import { useCompletionNotifications } from "./state/useCompletionNotifications";
 import { bff, type DemoGroupId, type DataSource, type ModelInfo } from "./api/bff";
 import { ModelContext } from "./state/modelContext";
 import { loadAppState, saveAppState } from "./state/persistence";
+import { conversationWorkId } from "./lib/conversationHistory";
 import { buildNodes, type ThreadNode } from "./lib/buildNodes";
 import type { Conversation } from "./state/types";
 import type { BranchTarget } from "./components/canvas/CanvasComposer";
 import type { CanvasToneId } from "./lib/canvasTones";
+import { PendingChatsContext } from "./state/pendingChatsContext";
+import { SidebarWidthContext } from "./state/sidebarWidthContext";
 
 const BRANCH_FIELD_LIMIT = 2400;
 const BRANCH_CONTEXT_LIMIT = 14000;
@@ -37,18 +41,6 @@ function createCanvasWorkId() {
   return `canvas_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function canvasWorkIdForConversation(conversations: Conversation[], conv: Conversation): string {
-  if (conv.canvasWorkId) return conv.canvasWorkId;
-  const byId = new Map(conversations.map((item) => [item.id, item]));
-  let current: Conversation | undefined = conv;
-  const seen = new Set<string>();
-  while (current?.parentThreadId && !seen.has(current.id)) {
-    seen.add(current.id);
-    current = byId.get(current.parentThreadId);
-  }
-  return current?.id ?? conv.id;
-}
-
 function canvasWorkIdForStart(
   conversations: Conversation[],
   currentCanvasWorkId: string | null,
@@ -56,7 +48,7 @@ function canvasWorkIdForStart(
 ) {
   if (branchTarget) {
     const parent = conversations.find((conversation) => conversation.id === branchTarget.parentThreadId);
-    return parent ? canvasWorkIdForConversation(conversations, parent) : branchTarget.parentThreadId;
+    return parent ? conversationWorkId(conversations, parent) : branchTarget.parentThreadId;
   }
   return currentCanvasWorkId ?? createCanvasWorkId();
 }
@@ -154,9 +146,15 @@ export default function App() {
   // App-wide model selection (shared by the home picker + canvas/result bylines).
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelId, setModelId] = useState<string>("");
-  const [llmConfigOpen, setLlmConfigOpen] = useState(false);
-  const [dataConnectionOpen, setDataConnectionOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+  const [settingsAddModel, setSettingsAddModel] = useState(false);
+  // Every model entry point (picker, gear, "Select a model" toast) opens Settings → Models.
+  const openSettings: OpenSettings = (tab, options) => {
+    setSettingsAddModel(Boolean(options?.addModel));
+    setSettingsTab(tab ?? "general");
+  };
   const [dataConnectionVersion, setDataConnectionVersion] = useState(0);
+  const [dataSelectionToken, setDataSelectionToken] = useState(0);
 
   async function refreshModels(preferredModelId?: string) {
     const r = await bff.models();
@@ -211,22 +209,10 @@ export default function App() {
             conversation.status === "active" ||
             conversation.status === "waiting_user"),
       )
-      .forEach((conversation) => chat.subscribe(conversation.id));
+      .forEach((conversation) => chat.subscribe(conversation.id, conversation.rawEvents.length - 1));
   }, [chat.subscribe, state.conversations]);
 
   const activeConversation = state.conversations.find((c) => c.id === state.activeId) ?? null;
-  const canvasConversations =
-    state.canvasScope === "active"
-      ? activeConversation
-        ? [activeConversation]
-        : []
-      : state.conversations.filter(
-          (conversation) =>
-            conversation.mode === "workspace" &&
-            state.currentCanvasWorkId &&
-            canvasWorkIdForConversation(state.conversations, conversation) === state.currentCanvasWorkId,
-        );
-
   // Both modes start a real agent thread immediately; canvas mode simply opens
   // that thread on the canvas instead of the answer-first result page.
   const onStart = (
@@ -236,7 +222,7 @@ export default function App() {
     signal?: AbortSignal,
     branchTarget?: BranchTarget | null,
     parentContext?: string,
-    options?: { preserveView?: boolean; canvasTone?: CanvasToneId },
+    options?: { preserveView?: boolean; canvasTone?: CanvasToneId; pendingId?: string },
   ) =>
     {
       const canvasWorkId =
@@ -249,7 +235,7 @@ export default function App() {
         mode,
         modelId,
         branchTarget ? { ...branchTarget, parentContext } : null,
-        mode === "workspace" ? (branchTarget ? "all" : "active") : undefined,
+        mode === "workspace" ? "all" : undefined,
         signal,
         { ...options, canvasWorkId },
       );
@@ -258,6 +244,27 @@ export default function App() {
   const onDeleteConversation = (id: string) => {
     void chat.deleteConversation(id);
   };
+
+  const openConversation = (id: string, view?: "result" | "canvas") => {
+    setCanvasSourceMismatch(null);
+    dispatch({ type: "OPEN_CONVERSATION", id, view });
+  };
+
+  // Toast (and optional desktop notification) when a chat you're not looking at finishes.
+  useCompletionNotifications(
+    state.conversations,
+    (conversation) => {
+      if (state.view === "result") return conversation.id === state.activeId;
+      if (state.view === "canvas") {
+        return (
+          conversation.id === state.activeId ||
+          conversationWorkId(state.conversations, conversation) === state.currentCanvasWorkId
+        );
+      }
+      return false;
+    },
+    (conversation) => openConversation(conversation.id, conversation.mode === "workspace" ? "canvas" : "result"),
+  );
 
   const clearCanvasTransitionTimer = () => {
     if (canvasTransitionTimeoutRef.current !== null) {
@@ -283,12 +290,13 @@ export default function App() {
   };
 
   const startOverWorkspace = (view: "home" | "canvas" = "home") => {
+    setCanvasSourceMismatch(null);
     setWorkspaceResetToken((token) => token + 1);
     dispatch({ type: "START_OVER_WORKSPACE", view, canvasWorkId: createCanvasWorkId() });
   };
 
   const openWorkspaceSetup = () => {
-    setDataConnectionOpen(true);
+    openSettings("connections");
   };
 
   const handleDataConnectionChanged = async (source?: DataSource) => {
@@ -324,7 +332,7 @@ export default function App() {
       "workspace",
       modelId,
       branchTarget ? { ...branchTarget, parentContext } : null,
-      branchTarget ? "all" : "active",
+      "all",
       undefined,
       { canvasTone, canvasWorkId },
     );
@@ -353,20 +361,22 @@ export default function App() {
   if (state.view === "result" && activeConversation) {
     content = (
       <AgentResultPage
+        key={activeConversation.id}
         conversation={activeConversation}
         conversations={state.conversations}
-        onShowProcess={() => dispatch({ type: "SET_VIEW", view: "canvas", canvasScope: "active" })}
+        onShowProcess={() => dispatch({ type: "SET_VIEW", view: "canvas", canvasScope: "all" })}
         onNewFlow={() => dispatch({ type: "NEW_FLOW" })}
-        onOpen={(id) => dispatch({ type: "OPEN_CONVERSATION", id })}
+        onOpen={openConversation}
         onDeleteConversation={onDeleteConversation}
         onRevertConversation={chat.revertConversationToNode}
-        onOpenWorkspaceSetup={openWorkspaceSetup}
         onAnswer={chat.answerPending}
         onFollowUp={(_database, query) =>
-          Promise.resolve(chat.sendMessage(activeConversation.id, query, modelId))
+          Promise.resolve(
+            chat.sendMessage(activeConversation.id, query, modelId, activeConversation.rawEvents.length - 1),
+          )
         }
         onStop={chat.cancel}
-        onOpenLlmConfig={() => setLlmConfigOpen(true)}
+        onOpenLlmConfig={() => openSettings("models")}
         dataSources={connectedSidebarSources}
       />
     );
@@ -376,24 +386,24 @@ export default function App() {
         conversations={state.conversations}
         onNewFlow={() => dispatch({ type: "NEW_FLOW" })}
         onBack={() => dispatch({ type: "SET_VIEW", view: "home" })}
-        onOpen={(id) => dispatch({ type: "OPEN_CONVERSATION", id })}
+        onOpen={openConversation}
         onDeleteConversation={onDeleteConversation}
-        onOpenLlmConfig={() => setLlmConfigOpen(true)}
+        onOpenLlmConfig={() => openSettings("models")}
       />
     );
   } else if (state.view === "canvas" && state.canvasDb) {
     content = (
       <CanvasPage
-        conversations={canvasConversations}
+        conversations={state.conversations}
+        key={state.currentCanvasWorkId}
+        onSelectConversation={(id) => openConversation(id, "canvas")}
         canvasDb={state.canvasDb}
         activeId={state.activeId}
         onDeleteConversation={onDeleteConversation}
         onRevertConversation={chat.revertConversationToNode}
-        backToResult={
-          activeConversation?.mode === "agent"
-            ? () => dispatch({ type: "SET_VIEW", view: "result" })
-            : undefined
-        }
+        onShowChat={() => activeConversation
+          ? dispatch({ type: "SET_VIEW", view: "result" })
+          : dispatch({ type: "NEW_FLOW" })}
         onStart={(database, query, branchTarget, canvasTone) => {
           const parentContext = buildBranchParentContext(state.conversations, branchTarget);
           const parentConversation = branchTarget
@@ -432,7 +442,7 @@ export default function App() {
         workspaceResetToken={workspaceResetToken}
         transitionPhase={canvasTransitionPhase}
         onConnectData={openWorkspaceSetup}
-        onOpenLlmConfig={() => setLlmConfigOpen(true)}
+        onOpenLlmConfig={() => openSettings("models")}
         hasDataSource={Boolean(activeConversation?.source ?? workspaceSource) || connectedSidebarSources.some((source) => source.ready)}
         dataSources={connectedSidebarSources}
         selectedDataSourceId={workspaceSource?.id ?? null}
@@ -464,13 +474,14 @@ export default function App() {
         conversations={state.conversations}
         activeId={state.activeId}
         onNewFlow={() => dispatch({ type: "NEW_FLOW" })}
-        onOpen={(id) => dispatch({ type: "OPEN_CONVERSATION", id })}
+        onOpen={openConversation}
         onDeleteConversation={onDeleteConversation}
         onStart={onStart}
         selectedDataSource={workspaceSource}
-        onOpenWorkspaceSetup={openWorkspaceSetup}
+        selectedSourceToken={dataSelectionToken}
         onOpenCanvas={openWorkspace}
-        onOpenLlmConfig={() => setLlmConfigOpen(true)}
+        onOpenConnections={() => openSettings("connections")}
+        onOpenLlmConfig={() => openSettings("models")}
         dataConnectionVersion={dataConnectionVersion}
       />
     );
@@ -478,17 +489,36 @@ export default function App() {
 
   return (
     <ModelContext.Provider value={{ models, selectedId: modelId, setSelectedId: setModelId }}>
+      <SettingsContext.Provider value={openSettings}>
+      <PendingChatsContext.Provider value={{ chats: state.pendingChats, dispatch }}>
+      <SidebarWidthContext.Provider value={{ width: state.sidebar_width, dispatch }}>
       {content}
-      <LlmConfigModal
-        open={llmConfigOpen}
-        onClose={() => setLlmConfigOpen(false)}
+      <SettingsModal
+        open={settingsTab !== null}
+        initialTab={settingsTab ?? undefined}
+        addModel={settingsAddModel}
+        onClose={() => setSettingsTab(null)}
         onModelsChanged={refreshModels}
+        onDataSourcesChanged={handleDataConnectionChanged}
+        onSelectDataSourceAndClose={(source) => {
+          setWorkspaceSource(source);
+          setCanvasSourceMismatch(null);
+          setDataSelectionToken((token) => token + 1);
+          setDataConnectionVersion((version) => version + 1);
+          if (state.view !== "home") dispatch({ type: "NEW_FLOW" });
+          setSettingsTab(null);
+        }}
+        onOpenDataSourceInCanvas={(source) => {
+          setSettingsTab(null);
+          setCanvasSourceMismatch(null);
+          setDataSelectionToken((token) => token + 1);
+          const sameSource = activeConversation?.source?.id === source.id;
+          showWorkspaceCanvas(source, sameSource);
+        }}
       />
-      <DataConnectionModal
-        open={dataConnectionOpen}
-        onClose={() => setDataConnectionOpen(false)}
-        onChanged={handleDataConnectionChanged}
-      />
+      </SidebarWidthContext.Provider>
+      </PendingChatsContext.Provider>
+      </SettingsContext.Provider>
     </ModelContext.Provider>
   );
 }

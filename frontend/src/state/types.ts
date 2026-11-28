@@ -2,6 +2,7 @@ import type { TimelineEvent, RawAgentEvent } from "../lib/buildTimeline";
 import type { StreamEvent } from "../api/eventStream";
 import type { DataSource } from "../api/bff";
 import type { CanvasToneId } from "../lib/canvasTones";
+import { DEFAULT_SIDEBAR_WIDTH } from "../lib/sidebarWidth";
 
 export type ConversationStatus =
   | "starting"
@@ -11,6 +12,7 @@ export type ConversationStatus =
   | "stopped"
   | "error";
 export type QueryMode = "agent" | "workspace";
+export const CHAT_START_NAVIGATION = Symbol("chat startup navigation");
 export type CanvasBranchKind = "follow_up" | "fork";
 
 export type Conversation = {
@@ -18,7 +20,7 @@ export type Conversation = {
   source?: DataSource;
   database: string;
   databases: string[];
-  mode: QueryMode;
+  mode: QueryMode; // creation mode; the active view controls how history is displayed
   canvasWorkId: string | null; // groups all runs/cards that belong to one canvas work/session
   parentThreadId: string | null; // branch threads: which conversation they forked from
   parentNodeId: string | null; // branch threads: which card inside the parent thread they forked from
@@ -39,8 +41,17 @@ export type Conversation = {
 export type View = "home" | "workspace_setup" | "result" | "canvas";
 export type CanvasScope = "all" | "active";
 
+export type PendingHistoryChat = {
+  id: string;
+  title: string;
+  database?: string;
+  createdAt: number;
+};
+
 export type AppState = {
+  sidebar_width: number;
   view: View;
+  pendingChats: PendingHistoryChat[];
   conversations: Conversation[]; // newest first — this IS the History list
   activeId: string | null;
   canvasDb: string | null;      // canvas-level database (first thread's choice; per-root pickers are a future UI change)
@@ -51,8 +62,10 @@ export type AppState = {
 };
 
 export const initialState: AppState = {
+  sidebar_width: DEFAULT_SIDEBAR_WIDTH,
   view: "home",
   conversations: [],
+  pendingChats: [],
   activeId: null,
   canvasDb: null,
   currentCanvasWorkId: null,
@@ -62,6 +75,10 @@ export const initialState: AppState = {
 };
 
 export type Action =
+  | { type: "SET_SIDEBAR_WIDTH"; width: number }
+  | { type: "PENDING_CHAT_STARTED"; chat: PendingHistoryChat }
+  | { type: "PENDING_CHAT_DATABASE"; id: string; database: string }
+  | { type: "PENDING_CHAT_FINISHED"; id: string }
   | {
       type: "CONVERSATION_STARTED";
       id: string;
@@ -78,6 +95,8 @@ export type Action =
       canvasTone?: CanvasToneId;
       canvasScope?: CanvasScope;
       preserveView?: boolean;
+      background?: boolean;
+      pendingId?: string;
     }
   | {
       type: "LOCAL_BRANCH_STARTED";
@@ -99,8 +118,9 @@ export type Action =
       id: string;
       answer: string;
     }
-  | { type: "SSE_EVENT"; id: string; event: StreamEvent }
+  | { type: "SSE_EVENT"; id: string; event: StreamEvent; eventIndex?: number }
   | { type: "SYNC_AGENT_EVENTS"; id: string; events: RawAgentEvent[] }
+  | { type: "SYNC_SESSION_STATE"; id: string; state: Record<string, unknown> }
   | { type: "SSE_STATUS"; id: string; connected: boolean }
   | { type: "TURN_SENT"; id: string }
   | { type: "TURN_DONE"; id: string }
@@ -108,11 +128,12 @@ export type Action =
   | { type: "SET_SUMMARY"; id: string; summary: string }
   | { type: "ANSWER_SENT"; id: string }
   | { type: "CONV_ERROR"; id: string; message: string }
+  | { type: "SESSION_NOT_FOUND"; id: string; message: string }
   | { type: "DELETE_CONVERSATION"; id: string }
   | { type: "REVERT_CONVERSATION_TO_NODE"; id: string; nodeId: string }
   | { type: "NEW_FLOW" }
   | { type: "START_OVER_WORKSPACE"; view?: "home" | "canvas"; canvasWorkId?: string | null }
-  | { type: "OPEN_CONVERSATION"; id: string }
+  | { type: "OPEN_CONVERSATION"; id: string; view?: "result" | "canvas" }
   | { type: "OPEN_WORKSPACE_SETUP" }
   | { type: "OPEN_WORKSPACE"; database: string; preserveActiveThread?: boolean }
   | { type: "SET_VIEW"; view: View; canvasScope?: CanvasScope }

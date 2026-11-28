@@ -1,6 +1,8 @@
 import { buildTimeline, type RawAgentEvent } from "../lib/buildTimeline";
 import { buildNodes } from "../lib/buildNodes";
+import { conversationWorkId } from "../lib/conversationHistory";
 import type { Action, AppState, Conversation } from "./types";
+import { normalizeSidebarWidth } from "../lib/sidebarWidth";
 
 function patch(
   state: AppState,
@@ -47,21 +49,23 @@ function statusFromEvents(events: RawAgentEvent[], fallback: Conversation["statu
   return events.length > 0 ? "active" : fallback;
 }
 
-function canvasWorkIdForConversation(conversations: Conversation[], conversation: Conversation) {
-  if (conversation.canvasWorkId) return conversation.canvasWorkId;
-  const byId = new Map(conversations.map((item) => [item.id, item]));
-  let current: Conversation | undefined = conversation;
-  const seen = new Set<string>();
-  while (current?.parentThreadId && !seen.has(current.id)) {
-    seen.add(current.id);
-    current = byId.get(current.parentThreadId);
-  }
-  return current?.canvasWorkId ?? current?.id ?? conversation.id;
-}
-
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "SET_SIDEBAR_WIDTH": {
+      const width = normalizeSidebarWidth(action.width);
+      return state.sidebar_width === width ? state : { ...state, sidebar_width: width };
+    }
+    case "PENDING_CHAT_STARTED":
+      return { ...state, pendingChats: [action.chat, ...state.pendingChats] };
+    case "PENDING_CHAT_DATABASE":
+      return {
+        ...state,
+        pendingChats: state.pendingChats.map((chat) => chat.id === action.id ? { ...chat, database: action.database } : chat),
+      };
+    case "PENDING_CHAT_FINISHED":
+      return { ...state, pendingChats: state.pendingChats.filter((chat) => chat.id !== action.id) };
     case "CONVERSATION_STARTED": {
+      const pending = state.pendingChats.find((chat) => chat.id === action.pendingId);
       const conv: Conversation = {
         id: action.id,
         source: action.source,
@@ -82,16 +86,20 @@ export function reducer(state: AppState, action: Action): AppState {
         turnInFlight: false,
         sseConnected: false,
         error: null,
-        createdAt: action.createdAt,
+        createdAt: pending?.createdAt ?? action.createdAt,
       };
+      const pendingChats = state.pendingChats.filter((chat) => chat.id !== action.pendingId);
+      if (action.background) return { ...state, pendingChats, conversations: [conv, ...state.conversations] };
       return {
         ...state,
+        pendingChats,
         // agent mode lands on the answer-first result page; canvas mode goes straight to canvas.
         // Embedded canvas starts the same real thread but stays on the home surface until expanded.
         view: action.preserveView ? state.view : action.mode === "agent" ? "result" : "canvas",
         activeId: conv.id,
         canvasDb: state.canvasDb ?? conv.database,
-        currentCanvasWorkId: conv.mode === "workspace" ? conv.canvasWorkId : state.currentCanvasWorkId,
+        currentCanvasWorkId: conv.canvasWorkId ?? conv.id,
+        entryMode: action.mode,
         canvasScope: action.canvasScope ?? (action.mode === "agent" ? state.canvasScope : "all"),
         conversations: [conv, ...state.conversations],
       };
@@ -138,17 +146,19 @@ export function reducer(state: AppState, action: Action): AppState {
         error: null,
       }));
     case "SSE_EVENT": {
-      if (action.event.type === "pending_question") {
-        const text = action.event.text;
+      const conversation = state.conversations.find((c) => c.id === action.id);
+      // A new EventSource replays the backend log after a page reload. Its
+      // stable event index makes that replay idempotent with persisted history.
+      if (action.eventIndex !== undefined && conversation && action.eventIndex < conversation.rawEvents.length) return state;
+      if (action.event.type === "pending_question" || action.event.type === "clarification_request") {
+        const question = action.event.type === "pending_question" ? action.event.text : action.event.question;
         return {
-          ...patch(state, action.id, (c) => ({ ...c, pendingQuestion: text, status: "waiting_user" })),
-          answerTarget: action.id,
-        };
-      }
-      if (action.event.type === "clarification_request") {
-        const question = action.event.question;
-        return {
-          ...patch(state, action.id, (c) => ({ ...c, pendingQuestion: question, status: "waiting_user" })),
+          ...patch(state, action.id, (c) => {
+            if (c.status === "done" || c.status === "stopped") return c;
+            const rawEvents: RawAgentEvent[] = c.pendingQuestion === question ? c.rawEvents
+              : [...c.rawEvents, { type: "clarification_request", question }];
+            return { ...c, rawEvents, timeline: buildTimeline(rawEvents), pendingQuestion: question, status: "waiting_user", turnInFlight: true };
+          }),
           answerTarget: action.id,
         };
       }
@@ -160,16 +170,43 @@ export function reducer(state: AppState, action: Action): AppState {
         // Terminal states (one-shot "done", user "stopped") must not be reopened
         // by trailing events (submit ack, late-arriving tool output).
         const terminal = c.status === "done" || c.status === "stopped";
-        const status = terminal ? c.status : isError ? "error" : isDone ? "done" : "active";
+        const answered = evt.type === "clarification_answer";
+        const running = evt.type === "runtime_status" && evt.status === "running";
+        const finishesWithError = evt.type === "done" && c.rawEvents.at(-1)?.type === "error";
+        const error = isError ? evt.message : finishesWithError ? c.error : null;
+        const pendingQuestion = answered || running || isDone || isError ? null : c.pendingQuestion;
+        const status = terminal ? c.status : isError || finishesWithError ? "error" : isDone ? "done" : pendingQuestion ? "waiting_user" : "active";
         return {
           ...c,
           rawEvents,
           timeline: buildTimeline(rawEvents),
+          pendingQuestion,
           status,
-          turnInFlight: isDone || isError || status === "done" || status === "stopped" ? false : c.turnInFlight,
-          error: isError ? evt.message : null,
+          turnInFlight: isDone || isError || status === "done" || status === "stopped" ? false : running || c.turnInFlight,
+          error,
         };
       });
+    }
+    case "SYNC_SESSION_STATE": {
+      const snapshot = action.state;
+      const events = Array.isArray(snapshot.agent_events) ? snapshot.agent_events as RawAgentEvent[] : [];
+      const next = patch(state, action.id, (c) => {
+        // Do not overwrite a newer SSE stream with an older HTTP snapshot.
+        if (events.length < c.rawEvents.length) return c;
+        const pendingQuestion = typeof snapshot.pending_question === "string" ? snapshot.pending_question : null;
+        const stopped = snapshot._cancelled === true;
+        const error = typeof snapshot.error === "string" ? snapshot.error : null;
+        const done = snapshot.task_done === true;
+        const running = snapshot.execution_status === "running";
+        const status = stopped ? "stopped" : error ? "error" : done ? "done" : pendingQuestion ? "waiting_user" : running ? "active" : statusFromEvents(events, c.status);
+        return {
+          ...c, rawEvents: events, timeline: buildTimeline(events),
+          pendingQuestion: stopped || done || error ? null : pendingQuestion,
+          status, error, turnInFlight: !stopped && !done && !error && (running || !!pendingQuestion || (snapshot.execution_status === "idle" && c.turnInFlight)),
+        };
+      });
+      const restored = next.conversations.find((c) => c.id === action.id);
+      return { ...next, answerTarget: restored?.pendingQuestion ? action.id : next.answerTarget === action.id ? null : next.answerTarget };
     }
     case "SYNC_AGENT_EVENTS":
       return patch(state, action.id, (c) => {
@@ -208,11 +245,16 @@ export function reducer(state: AppState, action: Action): AppState {
     case "SET_SUMMARY":
       return patch(state, action.id, (c) => ({ ...c, summary: action.summary }));
     case "ANSWER_SENT": {
-      const next = patch(state, action.id, (c) => ({ ...c, pendingQuestion: null, status: "active" }));
+      const next = patch(state, action.id, (c) => ({ ...c, pendingQuestion: null, status: c.status === "waiting_user" ? "active" : c.status }));
       return state.answerTarget === action.id ? { ...next, answerTarget: null } : next;
     }
     case "CONV_ERROR":
       return patch(state, action.id, (c) => ({ ...c, error: action.message, status: "error", turnInFlight: false }));
+    case "SESSION_NOT_FOUND":
+      return patch(state, action.id, (c) => {
+        if (c.status === "done" || c.status === "stopped") return { ...c, sseConnected: false };
+        return { ...c, sseConnected: false, error: action.message, status: "error", turnInFlight: false };
+      });
     case "DELETE_CONVERSATION": {
       const conversations = state.conversations.filter((c) => c.id !== action.id);
       const wasActive = state.activeId === action.id;
@@ -229,23 +271,18 @@ export function reducer(state: AppState, action: Action): AppState {
         view:
           conversations.length === 0
             ? "home"
-            : wasActive
-              ? nextActiveConversation?.mode === "agent"
-                ? "result"
-                : "canvas"
-              : state.view,
+            : state.view,
         canvasDb:
           state.canvasDb === deletedConversation?.database
             ? conversations[0]?.database ?? null
             : state.canvasDb,
-        currentCanvasWorkId:
-          deletedConversation?.canvasWorkId && state.currentCanvasWorkId === deletedConversation.canvasWorkId
-            ? nextActiveConversation?.canvasWorkId ?? null
-            : state.currentCanvasWorkId,
+        currentCanvasWorkId: wasActive && nextActiveConversation
+          ? conversationWorkId(conversations, nextActiveConversation)
+          : state.currentCanvasWorkId,
         canvasScope:
           conversations.length === 0
             ? "all"
-            : wasActive && nextActiveConversation?.mode === "workspace"
+            : wasActive && state.view === "canvas"
               ? "all"
               : state.canvasScope,
       };
@@ -290,38 +327,51 @@ export function reducer(state: AppState, action: Action): AppState {
       };
     case "OPEN_CONVERSATION": {
       const conv = state.conversations.find((c) => c.id === action.id);
-      const view: AppState["view"] = conv?.mode === "agent" ? "result" : "canvas";
+      if (!conv) return state;
+      const view = action.view ?? (state.view === "canvas" ? "canvas" : "result");
       return {
         ...state,
         view,
         activeId: action.id,
-        currentCanvasWorkId: conv?.mode === "workspace" ? conv.canvasWorkId ?? conv.id : state.currentCanvasWorkId,
-        canvasScope: conv?.mode === "workspace" ? "all" : state.canvasScope,
+        currentCanvasWorkId: conversationWorkId(state.conversations, conv),
+        canvasDb: conv.database,
+        canvasScope: "all",
+        entryMode: view === "canvas" ? "workspace" : "agent",
+        answerTarget: conv.pendingQuestion ? conv.id : null,
       };
     }
     case "OPEN_WORKSPACE": {
       const activeWorkspace = action.preserveActiveThread
-        ? state.conversations.find((c) => c.id === state.activeId && c.mode === "workspace") ??
-          state.conversations.find((c) => c.mode === "workspace" && state.currentCanvasWorkId &&
-            canvasWorkIdForConversation(state.conversations, c) === state.currentCanvasWorkId)
+        ? state.conversations.find((c) => c.id === state.activeId) ??
+          state.conversations.find((c) => state.currentCanvasWorkId &&
+            conversationWorkId(state.conversations, c) === state.currentCanvasWorkId)
         : null;
       return {
         ...state,
         view: "canvas",
         activeId: activeWorkspace ? activeWorkspace.id : null,
-        canvasDb: activeWorkspace ? state.canvasDb ?? activeWorkspace.database : action.database,
-        currentCanvasWorkId: activeWorkspace?.canvasWorkId ?? state.currentCanvasWorkId,
+        canvasDb: activeWorkspace ? activeWorkspace.database : action.database,
+        currentCanvasWorkId: activeWorkspace
+          ? conversationWorkId(state.conversations, activeWorkspace)
+          : state.currentCanvasWorkId,
         canvasScope: "all",
         answerTarget: null,
         entryMode: "workspace",
       };
     }
-    case "SET_VIEW":
+    case "SET_VIEW": {
+      const active = state.conversations.find((c) => c.id === state.activeId);
       return {
         ...state,
         view: action.view,
         canvasScope: action.view === "canvas" ? action.canvasScope ?? state.canvasScope : state.canvasScope,
+        canvasDb: action.view === "canvas" && active ? active.database : state.canvasDb,
+        currentCanvasWorkId: action.view === "canvas" && active
+          ? conversationWorkId(state.conversations, active)
+          : state.currentCanvasWorkId,
+        entryMode: action.view === "canvas" ? "workspace" : action.view === "result" ? "agent" : state.entryMode,
       };
+    }
     case "SET_ANSWER_TARGET":
       return { ...state, answerTarget: action.id };
     case "SET_ENTRY_MODE":

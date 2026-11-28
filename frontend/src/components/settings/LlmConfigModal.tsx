@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Anthropic, Gemini, Minimax, Ollama, OpenAI, XAI, ZAI } from "@lobehub/icons";
-import { Check, ChevronDown, KeyRound, Loader2, Plus, Settings2, Sparkles, Trash2, X } from "lucide-react";
+import { Anthropic, Gemini, Kimi, Minimax, Ollama, OpenAI, XAI, ZAI } from "@lobehub/icons";
+import { ArrowLeft, Check, ChevronDown, KeyRound, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
 import { bff, type LlmConfigsResponse, type LlmProfile, type LocalModelStatus } from "../../api/bff";
 import { cn } from "../../lib/cn";
 
@@ -17,7 +18,9 @@ const LOCAL_DEMO_MODEL = {
   sizeLabel: "about 1.14 GB",
 };
 
-type ProviderId = "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "ollama" | "other";
+const DEMO_PROVIDER_LABEL = "Demo · Qwen3 1.7B (local)";
+
+type ProviderId = "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "kimi" | "ollama" | "other";
 
 type ModelOption = {
   value: string;
@@ -31,12 +34,13 @@ type ModelOption = {
 type ProviderLogo = ComponentType<{ size: number; className?: string }>;
 
 const PROVIDERS: Array<{ id: ProviderId; label: string }> = [
-  { id: "other", label: "Custom API" },
+  { id: "openai", label: "OpenAI" },
   { id: "anthropic", label: "Anthropic" },
   { id: "gemini", label: "Gemini" },
+  { id: "other", label: "OpenAI-compatible API" },
+  { id: "kimi", label: "Kimi" },
   { id: "minimax", label: "MiniMax" },
   { id: "ollama", label: "Ollama" },
-  { id: "openai", label: "OpenAI" },
   { id: "xai", label: "xAI" },
   { id: "zai", label: "Z.ai" },
 ];
@@ -48,12 +52,53 @@ const PROVIDER_LOGO: Record<ProviderId, ProviderLogo> = {
   anthropic: Anthropic.Avatar,
   minimax: Minimax.Avatar,
   xai: XAI.Avatar,
+  kimi: Kimi.Avatar,
   ollama: Ollama.Avatar,
   other: KeyRound,
 };
 
+const CUSTOM_MODEL_PLACEHOLDER: Record<ProviderId, string> = {
+  other: "openai/your-model-name",
+  openai: "openai/gpt-6.2-sol",
+  gemini: "gemini/gemini-3.8-flash",
+  zai: "openai/glm-5.3",
+  anthropic: "claude-opus-5-5",
+  minimax: "minimax/MiniMax-M3.1-Flash",
+  xai: "xai/grok-4.7",
+  kimi: "openai/kimi-k3.1-pro",
+  ollama: "ollama_chat/glm-5.2:cloud",
+};
+
 const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   openai: [
+    {
+      value: "openai/gpt-6.2-astra",
+      label: "GPT-6.2 Astra",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "GPT-6.2 Astra",
+    },
+    {
+      value: "openai/gpt-6.2-sol",
+      label: "GPT-6.2 Sol",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "GPT-6.2 Sol",
+    },
+    {
+      value: "openai/gpt-6.1-terra",
+      label: "GPT-6.1 Terra",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "GPT-6.1 Terra",
+    },
+    {
+      value: "openai/gpt-6-luna",
+      label: "GPT-6 Luna",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "GPT-6 Luna",
+    },
     {
       value: "openai/gpt-5.5",
       label: "GPT-5.5",
@@ -90,34 +135,6 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       displayName: "GPT-5.4 Mini",
     },
     {
-      value: "openai/gpt-5.4-nano",
-      label: "GPT-5.4 Nano",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "GPT-5.4 Nano",
-    },
-    {
-      value: "openai/gpt-5.3-chat-latest",
-      label: "GPT-5.3 Chat",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "GPT-5.3 Chat",
-    },
-    {
-      value: "openai/gpt-5.2",
-      label: "GPT-5.2",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "GPT-5.2",
-    },
-    {
-      value: "openai/gpt-5.2-pro",
-      label: "GPT-5.2 Pro",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "GPT-5.2 Pro",
-    },
-    {
       value: CUSTOM_MODEL_VALUE,
       label: "Custom model",
       endpoint: "",
@@ -128,11 +145,53 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   ],
   gemini: [
     {
-      value: "gemini/gemini-3.5-flash",
-      label: "Gemini 3.5 Flash",
+      value: "gemini/gemini-4-carbon",
+      label: "Gemini 4 Carbon",
       endpoint: "",
       showEndpoint: false,
-      displayName: "Gemini 3.5 Flash",
+      displayName: "Gemini 4 Carbon",
+    },
+    {
+      value: "gemini/gemini-4-neon",
+      label: "Gemini 4 Neon",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 4 Neon",
+    },
+    {
+      value: "gemini/gemini-4-hydrogen",
+      label: "Gemini 4 Hydrogen",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 4 Hydrogen",
+    },
+    {
+      value: "gemini/gemini-4-argon",
+      label: "Gemini 4 Argon",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 4 Argon",
+    },
+    {
+      value: "gemini/gemini-3.8-flash",
+      label: "Gemini 3.8 Flash",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 3.8 Flash",
+    },
+    {
+      value: "gemini/gemini-3.6-flash",
+      label: "Gemini 3.6 Flash",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 3.6 Flash",
+    },
+    {
+      value: "gemini/gemini-3.5-flash-lite",
+      label: "Gemini 3.5 Flash-Lite",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Gemini 3.5 Flash-Lite",
     },
     {
       value: "gemini/gemini-3.1-pro-preview",
@@ -140,13 +199,6 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       endpoint: "",
       showEndpoint: false,
       displayName: "Gemini 3.1 Pro",
-    },
-    {
-      value: "gemini/gemini-3-pro-preview",
-      label: "Gemini 3 Pro",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 3 Pro",
     },
     {
       value: "gemini/gemini-3-flash-preview",
@@ -163,34 +215,6 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       displayName: "Gemini 3.1 Flash-Lite",
     },
     {
-      value: "gemini/gemini-2.5-pro",
-      label: "Gemini 2.5 Pro",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 2.5 Pro",
-    },
-    {
-      value: "gemini/gemini-2.5-flash",
-      label: "Gemini 2.5 Flash",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 2.5 Flash",
-    },
-    {
-      value: "gemini/gemini-2.5-flash-lite",
-      label: "Gemini 2.5 Flash-Lite",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 2.5 Flash-Lite",
-    },
-    {
-      value: "gemini/gemini-2.5-computer-use-preview-10-2025",
-      label: "Gemini 2.5 Computer Use",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Gemini 2.5 Computer Use",
-    },
-    {
       value: CUSTOM_MODEL_VALUE,
       label: "Custom model",
       endpoint: "",
@@ -201,67 +225,32 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   ],
   zai: [
     {
+      value: "openai/glm-5.4",
+      label: "GLM-5.4",
+      endpoint: "https://api.z.ai/api/coding/paas/v4",
+      showEndpoint: true,
+      displayName: "GLM-5.4",
+    },
+    {
+      value: "openai/glm-5.3",
+      label: "GLM-5.3",
+      endpoint: "https://api.z.ai/api/coding/paas/v4",
+      showEndpoint: true,
+      displayName: "GLM-5.3",
+    },
+    {
+      value: "openai/glm-5.3-flash",
+      label: "GLM-5.3 Flash",
+      endpoint: "https://api.z.ai/api/coding/paas/v4",
+      showEndpoint: true,
+      displayName: "GLM-5.3 Flash",
+    },
+    {
       value: "openai/glm-5.2",
       label: "GLM-5.2",
       endpoint: "https://api.z.ai/api/coding/paas/v4",
       showEndpoint: true,
       displayName: "GLM-5.2",
-    },
-    {
-      value: "openai/glm-5.1",
-      label: "GLM-5.1",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-5.1",
-    },
-    {
-      value: "openai/glm-5",
-      label: "GLM-5",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-5",
-    },
-    {
-      value: "openai/glm-4.7",
-      label: "GLM-4.7",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.7",
-    },
-    {
-      value: "openai/glm-4.6",
-      label: "GLM-4.6",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.6",
-    },
-    {
-      value: "openai/glm-4.5-air",
-      label: "GLM-4.5 Air",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.5 Air",
-    },
-    {
-      value: "openai/glm-4.5",
-      label: "GLM-4.5",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.5",
-    },
-    {
-      value: "openai/glm-4.6v",
-      label: "GLM-4.6V",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.6V",
-    },
-    {
-      value: "openai/glm-4.5v",
-      label: "GLM-4.5V",
-      endpoint: "https://api.z.ai/api/coding/paas/v4",
-      showEndpoint: true,
-      displayName: "GLM-4.5V",
     },
     {
       value: CUSTOM_MODEL_VALUE,
@@ -273,6 +262,48 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
     },
   ],
   anthropic: [
+    {
+      value: "claude-fable-5-2",
+      label: "Claude Fable 5.2",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Fable 5.2",
+    },
+    {
+      value: "claude-opus-5-5",
+      label: "Claude Opus 5.5",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Opus 5.5",
+    },
+    {
+      value: "claude-sonnet-5-5",
+      label: "Claude Sonnet 5.5",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Sonnet 5.5",
+    },
+    {
+      value: "claude-haiku-5-5",
+      label: "Claude Haiku 5.5",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Haiku 5.5",
+    },
+    {
+      value: "claude-fable-5-1",
+      label: "Claude Fable 5.1",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Fable 5.1",
+    },
+    {
+      value: "claude-opus-5",
+      label: "Claude Opus 5",
+      endpoint: "",
+      showEndpoint: false,
+      displayName: "Claude Opus 5",
+    },
     {
       value: "claude-fable-5",
       label: "Claude Fable 5",
@@ -323,13 +354,6 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       displayName: "Claude Sonnet 4.6",
     },
     {
-      value: "claude-sonnet-4-5",
-      label: "Claude Sonnet 4.5",
-      endpoint: "",
-      showEndpoint: false,
-      displayName: "Claude Sonnet 4.5",
-    },
-    {
       value: "claude-opus-4-5",
       label: "Claude Opus 4.5",
       endpoint: "",
@@ -347,126 +371,108 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   ],
   minimax: [
     {
+      value: "minimax/MiniMax-M3.1-Flash",
+      label: "MiniMax M3.1 Flash",
+      endpoint: "https://api.minimax.io/v1",
+      showEndpoint: false,
+      displayName: "MiniMax M3.1 Flash",
+    },
+    {
       value: "minimax/MiniMax-M3",
       label: "MiniMax M3",
       endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "MiniMax M3",
-    },
-    {
-      value: "minimax/MiniMax-M2.5",
-      label: "MiniMax M2.5",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2.5",
-    },
-    {
-      value: "minimax/MiniMax-M2.5-lightning",
-      label: "MiniMax M2.5 Lightning",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2.5 Lightning",
-    },
-    {
-      value: "minimax/MiniMax-M2.1",
-      label: "MiniMax M2.1",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2.1",
-    },
-    {
-      value: "minimax/MiniMax-M2.1-lightning",
-      label: "MiniMax M2.1 Lightning",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2.1 Lightning",
-    },
-    {
-      value: "minimax/MiniMax-M2",
-      label: "MiniMax M2",
-      endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
-      displayName: "MiniMax M2",
     },
     {
       value: CUSTOM_MODEL_VALUE,
       label: "Custom model",
       endpoint: "https://api.minimax.io/v1",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Custom MiniMax",
       custom: true,
     },
   ],
   xai: [
     {
+      value: "xai/grok-4.7",
+      label: "Grok 4.7",
+      endpoint: "https://api.x.ai",
+      showEndpoint: false,
+      displayName: "Grok 4.7",
+    },
+    {
+      value: "xai/grok-4.6",
+      label: "Grok 4.6",
+      endpoint: "https://api.x.ai",
+      showEndpoint: false,
+      displayName: "Grok 4.6",
+    },
+    {
       value: "xai/grok-4.5",
       label: "Grok 4.5",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Grok 4.5",
     },
     {
       value: "xai/grok-4.3",
       label: "Grok 4.3",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Grok 4.3",
     },
     {
       value: "xai/grok-4.20-0309-reasoning",
       label: "Grok 4.20 Reasoning",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Grok 4.20 Reasoning",
     },
     {
-      value: "xai/grok-4.20-beta-0309-non-reasoning",
+      value: "xai/grok-4.20-0309-non-reasoning",
       label: "Grok 4.20 Non-Reasoning",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Grok 4.20 Non-Reasoning",
-    },
-    {
-      value: "xai/grok-4-1-fast-reasoning",
-      label: "Grok 4.1 Fast Reasoning",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok 4.1 Fast Reasoning",
-    },
-    {
-      value: "xai/grok-4-1-fast-non-reasoning",
-      label: "Grok 4.1 Fast Non-Reasoning",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok 4.1 Fast Non-Reasoning",
-    },
-    {
-      value: "xai/grok-4",
-      label: "Grok 4",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok 4",
-    },
-    {
-      value: "xai/grok-code-fast-1",
-      label: "Grok Code Fast 1",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok Code Fast 1",
-    },
-    {
-      value: "xai/grok-3-mini",
-      label: "Grok 3 Mini",
-      endpoint: "https://api.x.ai",
-      showEndpoint: true,
-      displayName: "Grok 3 Mini",
     },
     {
       value: CUSTOM_MODEL_VALUE,
       label: "Custom model",
       endpoint: "https://api.x.ai",
-      showEndpoint: true,
+      showEndpoint: false,
       displayName: "Custom Grok",
+      custom: true,
+    },
+  ],
+  kimi: [
+    {
+      value: "openai/kimi-k3.1-pro",
+      label: "Kimi K3.1 Pro",
+      endpoint: "https://api.moonshot.ai/v1",
+      showEndpoint: false,
+      displayName: "Kimi K3.1 Pro",
+    },
+    {
+      value: "openai/kimi-k3.1-pro-highspeed",
+      label: "Kimi K3.1 Pro Highspeed",
+      endpoint: "https://api.moonshot.ai/v1",
+      showEndpoint: false,
+      displayName: "Kimi K3.1 Pro Highspeed",
+    },
+    {
+      value: "openai/kimi-k3",
+      label: "Kimi K3",
+      endpoint: "https://api.moonshot.ai/v1",
+      showEndpoint: false,
+      displayName: "Kimi K3",
+    },
+    {
+      value: CUSTOM_MODEL_VALUE,
+      label: "Custom model",
+      endpoint: "https://api.moonshot.ai/v1",
+      showEndpoint: false,
+      displayName: "Custom Kimi",
       custom: true,
     },
   ],
@@ -584,7 +590,7 @@ const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
       label: "Custom model",
       endpoint: "",
       showEndpoint: true,
-      displayName: "Custom API",
+      displayName: "OpenAI-compatible API",
       custom: true,
     },
   ],
@@ -599,21 +605,20 @@ type FormState = {
   apiBase: string;
 };
 
-function profileBadges(profile: LlmProfile, isDefault: boolean): string[] {
-  const labels: string[] = [];
-  if (isDefault) labels.push("Default");
-  if (profile.read_only) labels.push("Read-only");
-  if (!profile.enabled) labels.push("Disabled");
-  if (profile.enabled && !profile.available) labels.push(["ollama", "other"].includes(profile.provider) ? "Needs endpoint" : "Needs key");
-  return labels;
-}
-
 function providerLabel(provider: string): string {
   return PROVIDERS.find((item) => item.id === provider)?.label ?? provider;
 }
 
+/** Model preselected when a provider is picked. Falls back to the first listed model. */
+const DEFAULT_MODEL: Partial<Record<ProviderId, string>> = {
+  openai: "openai/gpt-6.2-sol",
+  anthropic: "claude-opus-5-5",
+  gemini: "gemini/gemini-3.1-pro-preview",
+};
+
 function formForProvider(provider: ProviderId): FormState {
-  const option = MODEL_OPTIONS[provider][0];
+  const options = MODEL_OPTIONS[provider];
+  const option = options.find((item) => item.value === DEFAULT_MODEL[provider]) ?? options[0];
   return {
     provider,
     profileLabel: "",
@@ -699,8 +704,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+export type EmbeddedHeader = { title: string; onBack?: () => void; backDisabled?: boolean };
+
 export function LlmConfigModal(props: {
   open: boolean;
+  /** Render inside another panel (Settings → Models): no overlay, card chrome or close button. */
+  embedded?: boolean;
+  /** Open on the "Add a model" form even when saved models exist. */
+  startInAdd?: boolean;
+  /** Embedded only: reports the form view's title and back action so the host header can show them. */
+  onHeaderChange?: (header: EmbeddedHeader | null) => void;
   onClose: () => void;
   onModelsChanged: (preferredModelId?: string) => Promise<void> | void;
 }) {
@@ -715,6 +728,8 @@ export function LlmConfigModal(props: {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
+  const [view, setView] = useState<"list" | "form">("form");
+  const [demoSelected, setDemoSelected] = useState(false);
   const providerMenuRef = useRef<HTMLDivElement | null>(null);
 
   const selectedProfile = useMemo(
@@ -732,17 +747,15 @@ export function LlmConfigModal(props: {
   const ActiveProviderLogo = PROVIDER_LOGO[form.provider];
   const confirmDisabled = readOnly || saving || (deletePending && !selectedProfile);
 
-  async function loadConfigs(preferredId?: string) {
+  async function loadConfigs() {
     setLoading(true);
     setError("");
     try {
       const response = await bff.llmConfigs();
       setData(response);
-      const nextId =
-        preferredId && response.profiles.some((profile) => profile.id === preferredId)
-          ? preferredId
-          : response.profiles[0]?.id ?? NEW_ID;
-      setSelectedId(nextId);
+      setSelectedId(NEW_ID);
+      setDemoSelected(false);
+      setView(response.profiles.length > 0 && !props.startInAdd ? "list" : "form");
     } catch (err) {
       setError(String(err));
     } finally {
@@ -750,9 +763,33 @@ export function LlmConfigModal(props: {
     }
   }
 
+  function showList(response: LlmConfigsResponse) {
+    setSelectedId(NEW_ID);
+    setDemoSelected(false);
+    setDeletePending(false);
+    setMessage("");
+    setError("");
+    setView(response.profiles.length > 0 ? "list" : "form");
+  }
+
+  function startAdd() {
+    setSelectedId(NEW_ID);
+    setDemoSelected(false);
+    setForm(formForProvider("openai"));
+    setMessage("");
+    setError("");
+    setView("form");
+  }
+
+  function startEdit(profileId: string) {
+    setSelectedId(profileId);
+    setDemoSelected(false);
+    setView("form");
+  }
+
   useEffect(() => {
     if (!props.open) return;
-    loadConfigs(selectedId === NEW_ID ? undefined : selectedId);
+    loadConfigs();
     setDeletePending(false);
   }, [props.open]);
 
@@ -780,7 +817,7 @@ export function LlmConfigModal(props: {
       setDeletePending(false);
       return;
     }
-    const provider = (["openai", "gemini", "zai", "anthropic", "minimax", "xai", "ollama", "other"].includes(selectedProfile.provider)
+    const provider = (["openai", "gemini", "zai", "anthropic", "minimax", "xai", "kimi", "ollama", "other"].includes(selectedProfile.provider)
       ? selectedProfile.provider
       : "other") as ProviderId;
     const fallback = optionFor(provider, selectedProfile.model);
@@ -796,6 +833,24 @@ export function LlmConfigModal(props: {
     setError("");
     setDeletePending(false);
   }, [selectedProfile]);
+
+  // Embedded: the host panel owns the header, so tell it what this view should be titled.
+  const { onHeaderChange } = props;
+  const hasSavedProfiles = (data?.profiles.length ?? 0) > 0;
+  useEffect(() => {
+    if (!props.embedded || !onHeaderChange) return;
+    if (view !== "form") {
+      onHeaderChange(null);
+      return;
+    }
+    onHeaderChange({
+      title: selectedProfile ? "Edit model" : "Add a model",
+      onBack: hasSavedProfiles && data ? () => showList(data) : undefined,
+      backDisabled: saving,
+    });
+  }, [props.embedded, onHeaderChange, view, selectedProfile, hasSavedProfiles, data, saving]);
+
+  useEffect(() => () => onHeaderChange?.(null), [onHeaderChange]);
 
   if (!props.open) return null;
 
@@ -851,9 +906,9 @@ export function LlmConfigModal(props: {
       const refreshedId =
         response.profiles.find((profile) => profile.model === resolvedModel && profile.provider === form.provider)?.id ??
         response.default_model_id;
-      setSelectedId(refreshedId || NEW_ID);
       setForm((current) => ({ ...current, apiKey: "" }));
-      setMessage(isEdit ? "Connection verified and model updated" : "Connection verified and model added");
+      toast.success(isEdit ? `${resolvedDisplayName} updated` : `${resolvedDisplayName} added`);
+      showList(response);
       await props.onModelsChanged(refreshedId);
     } catch (err) {
       setError(String(err));
@@ -862,15 +917,15 @@ export function LlmConfigModal(props: {
     }
   }
 
-  async function handleSetDefault() {
-    if (!selectedProfile || readOnly) return;
+  async function handleSetDefault(profile: LlmProfile) {
+    if (profile.read_only) return;
     setSaving(true);
     setError("");
     setMessage("");
     try {
-      const response = await bff.setDefaultLlmConfig(selectedProfile.id);
+      const response = await bff.setDefaultLlmConfig(profile.id);
       setData(response);
-      setMessage("Default model updated");
+      toast.success(`${displayLabelForProfile(profile)} is now the default`);
       await props.onModelsChanged(response.default_model_id);
     } catch (err) {
       setError(String(err));
@@ -896,12 +951,8 @@ export function LlmConfigModal(props: {
     try {
       const response = await bff.deleteLlmConfig(selectedProfile.id);
       setData(response);
-      const nextId =
-        (response.default_model_id && response.profiles.some((profile) => profile.id === response.default_model_id)
-          ? response.default_model_id
-          : response.profiles[0]?.id) ?? NEW_ID;
-      setSelectedId(nextId);
-      setMessage(`${profileName} deleted`);
+      toast.success(`${profileName} deleted`);
+      showList(response);
       await props.onModelsChanged(response.default_model_id || response.profiles[0]?.id);
     } catch (err) {
       setError(String(err));
@@ -917,6 +968,10 @@ export function LlmConfigModal(props: {
       setDeleting(false);
       setMessage("");
       setError("");
+      return;
+    }
+    if (data && data.profiles.length > 0) {
+      showList(data);
       return;
     }
     props.onClose();
@@ -978,9 +1033,9 @@ export function LlmConfigModal(props: {
             profile.api_base === LOCAL_DEMO_MODEL.apiBase,
         ) ?? response.profiles.find((profile) => profile.id === response.default_model_id);
       setData(response);
-      setSelectedId(connectedProfile?.id ?? response.default_model_id ?? NEW_ID);
       setForm((current) => ({ ...current, apiKey: "" }));
-      setMessage(`${LOCAL_DEMO_MODEL.label} connected and set as default`);
+      toast.success(`${LOCAL_DEMO_MODEL.label} connected and set as default`);
+      showList(response);
       await props.onModelsChanged(connectedProfile?.id ?? response.default_model_id);
     } catch (err) {
       setError(String(err));
@@ -990,347 +1045,346 @@ export function LlmConfigModal(props: {
     }
   }
 
+  const profiles = data?.profiles ?? [];
+  const canGoBack = view === "form" && profiles.length > 0;
+  const keyOptional = ["ollama", "other"].includes(form.provider);
+  const inputClass =
+    "h-11 w-full rounded-xl border border-line bg-card px-3.5 text-[14px] text-ink outline-none transition focus:border-accent disabled:bg-surface disabled:text-muted";
+  const labelClass = "text-[12.5px] font-medium text-muted";
+  const title = view === "list" ? "Models" : selectedProfile ? "Edit model" : "Add a model";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(12,16,12,0.32)] p-4 backdrop-blur-sm">
-      <div className="relative flex h-[min(760px,94vh)] w-full max-w-6xl overflow-hidden rounded-[34px] border border-line bg-[#fbfbf8] shadow-[0_32px_100px_rgba(11,18,14,0.18)]">
-        <button
-          type="button"
-          onClick={props.onClose}
-          className="absolute right-10 top-7 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-line bg-card text-muted transition hover:bg-hover hover:text-ink"
-        >
-          <X className="h-6 w-6" />
-        </button>
-        <aside className="flex w-[320px] shrink-0 flex-col border-r border-line/80 bg-[linear-gradient(180deg,#f5f8f1_0%,#fbfbf8_100%)] p-6">
-          <div className="mb-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
-              <Settings2 className="h-3.5 w-3.5" />
-              LLM Configure
-            </div>
-          </div>
-
-          <p className="mb-6 text-[13px] leading-6 text-muted">
-            Manage local model profiles for this app instance.
-          </p>
-
+    <div
+      className={cn(
+        props.embedded
+          ? "flex min-h-0 flex-1 flex-col"
+          : "fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm",
+      )}
+      onMouseDown={(event) => {
+        if (!props.embedded && event.target === event.currentTarget && !saving) props.onClose();
+      }}
+    >
+      <div
+        className={cn(
+          "relative flex flex-col overflow-hidden",
+          props.embedded
+            ? "min-h-0 flex-1"
+            : "max-h-[90vh] w-full max-w-[480px] rounded-[24px] border border-line bg-card shadow-[0_32px_100px_rgba(11,18,14,0.18)]",
+        )}
+      >
+        {!props.embedded && (
+        <header className={cn("flex items-center gap-2 px-6 pb-2", props.embedded ? "pt-4" : "pt-5")}>
+          {canGoBack && (
+            <button
+              type="button"
+              onClick={() => data && showList(data)}
+              disabled={saving}
+              title="Back to models"
+              aria-label="Back to models"
+              className="-ml-2 flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-hover hover:text-ink disabled:opacity-45"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
+          <h2 className={cn("flex-1 font-semibold tracking-[-0.01em] text-ink", props.embedded ? "text-[15px]" : "text-[18px]")}>{title}</h2>
+          {!props.embedded && (
           <button
             type="button"
-            onClick={() => setSelectedId(NEW_ID)}
-            className={cn(
-              "mb-3 inline-flex items-center justify-center gap-2 rounded-[24px] border px-4 py-3 text-[14px] font-medium transition",
-              selectedId === NEW_ID
-                ? "border-accent bg-accent-soft text-accent"
-                : "border-line bg-card text-ink hover:bg-hover",
-            )}
+            onClick={props.onClose}
+            title="Close"
+            aria-label="Close"
+            className="-mr-2 flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-hover hover:text-ink"
           >
-            <Plus className="h-4 w-4" />
-            Add Model
+            <X className="h-4 w-4" />
           </button>
+          )}
+        </header>
+        )}
 
-          <button
-            type="button"
-            onClick={handleConnectDemoModel}
-            disabled={saving || loading}
-            title="Connect local Qwen demo model"
-            className="mb-4 inline-flex items-center justify-center gap-2 rounded-[24px] border border-accent/60 bg-accent-soft px-4 py-3 text-[14px] font-medium text-accent transition hover:bg-accent-soft/80 disabled:opacity-45"
-          >
-            {demoConnecting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
+        {view === "list" ? (
+          <div className={cn("flex flex-col gap-2 px-6 pb-6", props.embedded ? "pt-4" : "pt-2", SCROLLBAR)}>
+            {loading && (
+              <span className="inline-flex items-center gap-2 py-2 text-[13px] text-muted">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading models…
+              </span>
             )}
-            Demo
-          </button>
-
-          <div className={cn("min-h-0 flex-1 space-y-2 pr-1", SCROLLBAR)}>
-            {(data?.profiles ?? []).map((profile) => {
-              const active = profile.id === selectedId;
+            {profiles.map((profile) => {
+              const isDefault = data?.default_model_id === profile.id;
+              const isDemo = profile.model === LOCAL_DEMO_MODEL.model && profile.api_base === LOCAL_DEMO_MODEL.apiBase;
+              const Logo = isDemo ? Sparkles : PROVIDER_LOGO[(profile.provider as ProviderId)] ?? KeyRound;
               return (
-                <button
+                <div
                   key={profile.id}
-                  type="button"
-                  onClick={() => setSelectedId(profile.id)}
-                  className={cn(
-                    "w-full rounded-[22px] border p-3 text-left transition",
-                    active
-                      ? "border-accent/60 bg-accent-soft/70 shadow-sm"
-                      : "border-line bg-card hover:bg-hover",
-                  )}
+                  className="group flex items-center gap-3 rounded-2xl border border-line px-3.5 py-3 transition hover:bg-hover"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-[14px] font-semibold text-ink">{displayLabelForProfile(profile)}</div>
-                      <div className="mt-1 truncate text-[12px] text-muted">
-                        {providerLabel(profile.provider)} · {optionLabelByValue(profile.model)}
-                      </div>
-                    </div>
-                    {data?.default_model_id === profile.id && (
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                    )}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {profileBadges(profile, data?.default_model_id === profile.id).map((badge) => (
-                      <span
-                        key={badge}
-                        className="rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted"
-                      >
-                        {badge}
+                  <button
+                    type="button"
+                    onClick={() => startEdit(profile.id)}
+                    title={profile.read_only ? "View model" : "Edit model"}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[6px]">
+                      <Logo size={20} className={cn("h-5 w-5", isDemo && "text-accent")} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-medium text-ink">{displayLabelForProfile(profile)}</span>
+                      <span className="block truncate text-[12px] text-muted">
+                        {isDemo ? "Demo · runs on this computer" : `${providerLabel(profile.provider)} · ${optionLabelByValue(profile.model)}`}
                       </span>
-                    ))}
-                  </div>
-                </button>
+                    </span>
+                  </button>
+                  {isDefault ? (
+                    <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">Default</span>
+                  ) : (
+                    !profile.read_only && (
+                      <button
+                        type="button"
+                        onClick={() => void handleSetDefault(profile)}
+                        disabled={saving}
+                        title="Use this model by default"
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium text-muted opacity-0 transition hover:bg-card hover:text-ink group-hover:opacity-100 disabled:opacity-45"
+                      >
+                        Set default
+                      </button>
+                    )
+                  )}
+                </div>
               );
             })}
+            <button
+              type="button"
+              onClick={startAdd}
+              className="mt-1 flex items-center justify-center gap-2 rounded-2xl border border-dashed border-line px-4 py-3 text-[14px] font-medium text-muted transition hover:border-accent/50 hover:bg-accent-soft hover:text-accent"
+            >
+              <Plus className="h-4 w-4" />
+              Add a model
+            </button>
           </div>
-        </aside>
-
-        <section className={cn("flex min-w-0 flex-1 flex-col p-10", SCROLLBAR)}>
-          <div className="mb-8 flex items-start justify-between gap-4 border-b border-line/80 pb-6">
-            <div>
-              <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-ink">
-                {selectedProfile ? "Edit Model" : "Add Model"}
-              </h2>
-              <p className="mt-2 text-[14px] leading-6 text-muted">
-                {readOnly
-                  ? "This model comes from server env fallback and is visible here for selection only."
-                  : "Choose a provider, paste the API key, and pick the model you want to use."}
-              </p>
-            </div>
-          </div>
-
-          <div className="max-w-3xl space-y-7">
-            <label className="block space-y-3">
-              <span className="text-[13px] font-medium text-[#526074]">
-                <span className="mr-1 text-[#ff5f56]">*</span>
-                Model Provider
-              </span>
-              <div ref={providerMenuRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => !readOnly && !isEdit && setProviderMenuOpen((value) => !value)}
-                  disabled={readOnly || isEdit}
-                  className="flex h-16 w-full items-center gap-4 rounded-[18px] border border-line bg-card px-6 pr-14 text-left text-[16px] text-ink outline-none transition hover:bg-hover disabled:bg-surface"
-                >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[6px]">
-                    <ActiveProviderLogo size={22} className="h-5 w-5" />
-                  </span>
-                  <span className="truncate">{providerLabel(form.provider)}</span>
-                  <ChevronDown className="pointer-events-none absolute right-5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
-                </button>
-                {providerMenuOpen && !readOnly && !isEdit && (
-                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-[20px] border border-line bg-card p-2 shadow-[0_18px_40px_rgba(24,32,28,0.14)]">
-                    <div className={cn("flex max-h-72 flex-col gap-1", SCROLLBAR)}>
-                      {PROVIDERS.map((provider) => {
-                        const Logo = PROVIDER_LOGO[provider.id];
-                        const active = provider.id === form.provider;
-                        return (
-                          <button
-                            key={provider.id}
-                            type="button"
-                            onClick={() => {
-                              setForm(formForProvider(provider.id));
-                              setProviderMenuOpen(false);
-                            }}
-                            className={cn(
-                              "flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-[16px] transition",
-                              active ? "bg-accent-soft text-accent" : "text-ink hover:bg-hover",
-                            )}
-                          >
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[6px]">
-                              <Logo size={22} className="h-5 w-5" />
-                            </span>
-                            <span className="flex-1 truncate">{provider.label}</span>
-                            {active && <Check className="h-4 w-4 shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </label>
-
-            {activeOption.showEndpoint && (
-              <label className="block space-y-3">
-                <span className="text-[13px] font-medium text-[#526074]">API Endpoint</span>
-                <input
-                  value={form.apiBase}
-                  onChange={(e) => setForm((current) => ({ ...current, apiBase: e.target.value }))}
-                  disabled={readOnly}
-                  className="h-16 w-full rounded-[18px] border border-line bg-card px-6 text-[16px] text-ink outline-none transition focus:border-accent disabled:bg-surface"
-                  placeholder={activeOption.endpoint}
-                />
-                <p className="text-[12px] text-muted">
-                  {isCustomProvider
-                    ? "Enter a base URL for OpenAI-compatible custom providers. Leave blank for default provider endpoints."
-                    : "Default endpoint is prefilled. Change this only if your provider runs somewhere else."}
+        ) : (
+          <>
+            <div className={cn("flex flex-col gap-4 px-6 pb-2", props.embedded ? "min-h-0 flex-1 pt-4" : "pt-2", SCROLLBAR)}>
+              {readOnly && (
+                <p className="text-[12.5px] leading-5 text-muted">
+                  This model comes from server settings and can only be selected, not edited.
                 </p>
-              </label>
-            )}
-
-            <label className="block space-y-3">
-              <span className="text-[13px] font-medium text-[#526074]">
-                {!["ollama", "other"].includes(form.provider) && <span className="mr-1 text-[#ff5f56]">*</span>}
-                API Key
-              </span>
-              <input
-                value={form.apiKey}
-                onChange={(e) => setForm((current) => ({ ...current, apiKey: e.target.value }))}
-                disabled={readOnly}
-                className="h-16 w-full rounded-[18px] border border-line bg-card px-6 text-[16px] text-ink outline-none transition focus:border-accent disabled:bg-surface"
-                placeholder={
-                  form.provider === "ollama"
-                    ? "Optional for local Ollama"
-                    : form.provider === "other"
-                      ? "Leave blank only for local models or endpoints that do not require an API key."
-                    : selectedProfile?.api_key_masked
-                      ? "Key already saved"
-                      : "Paste API key"
-                }
-              />
-              {selectedProfile?.api_key_masked && !readOnly && (
-                <p className="text-[12px] text-muted">Leave this blank if you want to keep the saved key.</p>
               )}
-            </label>
 
-            {isCustomProvider && (
-              <label className="block space-y-3">
-                <span className="text-[13px] font-medium text-[#526074]">Display Name</span>
-                <input
-                  value={form.profileLabel}
-                  onChange={(e) => setForm((current) => ({ ...current, profileLabel: e.target.value }))}
-                  disabled={readOnly}
-                  className="h-16 w-full rounded-[18px] border border-line bg-card px-6 text-[16px] text-ink outline-none transition focus:border-accent disabled:bg-surface"
-                  placeholder="Name shown in the model list"
-                />
-              </label>
-            )}
-
-            <label className="block space-y-3">
-              <span className="text-[13px] font-medium text-[#526074]">
-                <span className="mr-1 text-[#ff5f56]">*</span>
-                Model Name
-              </span>
-              <div className="relative">
-                <select
-                  value={form.model}
-                  onChange={(e) => {
-                    const next = optionFor(form.provider, e.target.value);
-                    setForm((current) => ({
-                      ...current,
-                      model: next.value,
-                      customModel: next.custom ? current.customModel : "",
-                      apiBase: next.endpoint || current.apiBase,
-                    }));
-                  }}
-                  disabled={readOnly}
-                  className="h-16 w-full appearance-none rounded-[18px] border border-line bg-card px-6 pr-14 text-[16px] text-ink outline-none transition focus:border-accent disabled:bg-surface"
-                >
-                  {MODEL_OPTIONS[form.provider].map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+              <div className="space-y-1.5">
+                <span className={labelClass}>Provider</span>
+                <div ref={providerMenuRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => !readOnly && !isEdit && setProviderMenuOpen((value) => !value)}
+                    disabled={readOnly || isEdit || saving}
+                    className={cn(inputClass, "relative flex items-center gap-2.5 pr-10 text-left hover:bg-hover")}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-[5px]">
+                      {demoSelected ? <Sparkles className="h-4 w-4 text-accent" /> : <ActiveProviderLogo size={18} className="h-[18px] w-[18px]" />}
+                    </span>
+                    <span className="truncate">{demoSelected ? DEMO_PROVIDER_LABEL : providerLabel(form.provider)}</span>
+                    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                  </button>
+                  {providerMenuOpen && !readOnly && !isEdit && (
+                    <div className="mt-1.5 overflow-hidden rounded-2xl border border-line bg-card p-1.5 shadow-[0_8px_24px_rgba(24,32,28,0.10)]">
+                      <div className={cn("flex max-h-60 flex-col gap-0.5", SCROLLBAR)}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDemoSelected(true);
+                            setError("");
+                            setMessage("");
+                            setProviderMenuOpen(false);
+                          }}
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[14px] transition",
+                            demoSelected ? "bg-accent-soft text-accent" : "text-ink hover:bg-hover",
+                          )}
+                        >
+                          <Sparkles className="h-[18px] w-[18px] shrink-0 text-accent" />
+                          <span className="flex-1 truncate">{DEMO_PROVIDER_LABEL}</span>
+                          {demoSelected && <Check className="h-4 w-4 shrink-0" />}
+                        </button>
+                        <div className="mx-2 my-0.5 h-px bg-line/70" />
+                        {PROVIDERS.map((provider) => {
+                          const Logo = PROVIDER_LOGO[provider.id];
+                          const active = !demoSelected && provider.id === form.provider;
+                          return (
+                            <button
+                              key={provider.id}
+                              type="button"
+                              onClick={() => {
+                                setDemoSelected(false);
+                                setForm(formForProvider(provider.id));
+                                setError("");
+                                setMessage("");
+                                setProviderMenuOpen(false);
+                              }}
+                              className={cn(
+                                "flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[14px] transition",
+                                active ? "bg-accent-soft text-accent" : "text-ink hover:bg-hover",
+                              )}
+                            >
+                              <span className="flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-[5px]">
+                                <Logo size={18} className="h-[18px] w-[18px]" />
+                              </span>
+                              <span className="flex-1 truncate">{provider.label}</span>
+                              {active && <Check className="h-4 w-4 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </label>
 
-            {usesCustomModelInput && (
-              <label className="block space-y-3">
-                <span className="text-[13px] font-medium text-[#526074]">
-                  <span className="mr-1 text-[#ff5f56]">*</span>
-                  Model ID
-                </span>
-                <input
-                  value={form.customModel}
-                  onChange={(e) => setForm((current) => ({ ...current, customModel: e.target.value }))}
-                  disabled={readOnly}
-                  className="h-16 w-full rounded-[18px] border border-line bg-card px-6 text-[16px] text-ink outline-none transition focus:border-accent disabled:bg-surface"
-                  placeholder={
-                    form.provider === "other"
-                      ? "Example: openai/gpt-4o or openai/your-model-name"
-                      : form.provider === "openai"
-                      ? "openai/gpt-5.5"
-                      : form.provider === "gemini"
-                        ? "gemini/gemini-3.5-flash"
-                        : form.provider === "zai"
-                          ? "openai/glm-5.2"
-                          : form.provider === "anthropic"
-                            ? "claude-opus-4-8"
-                            : form.provider === "minimax"
-                              ? "minimax/MiniMax-M3"
-                              : form.provider === "xai"
-                                ? "xai/grok-4.5"
-                                : "ollama_chat/glm-5.2:cloud"
-                  }
-                />
-              </label>
-            )}
+              {demoSelected ? (
+                <p className="rounded-xl bg-surface px-3.5 py-3 text-[13px] leading-5 text-muted">
+                  Runs on this computer — no API key needed. The first time, it downloads {LOCAL_DEMO_MODEL.sizeLabel}.
+                  Good for trying AurigaSQL; answers are less accurate than hosted models.
+                </p>
+              ) : (
+                <>
+                  {activeOption.showEndpoint && (
+                    <label className="block space-y-1.5">
+                      <span className={labelClass}>API endpoint</span>
+                      <input
+                        value={form.apiBase}
+                        onChange={(e) => setForm((current) => ({ ...current, apiBase: e.target.value }))}
+                        disabled={readOnly}
+                        className={inputClass}
+                        placeholder={activeOption.endpoint || "https://…/v1"}
+                      />
+                      <p className="text-[12px] text-faint">
+                        {isCustomProvider
+                          ? "Base URL of an OpenAI-compatible API."
+                          : "Change only if your provider runs somewhere else."}
+                      </p>
+                    </label>
+                  )}
 
-          </div>
+                  <label className="block space-y-1.5">
+                    <span className={labelClass}>
+                      API key{keyOptional && <span className="text-faint"> (optional)</span>}
+                    </span>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      value={form.apiKey}
+                      onChange={(e) => setForm((current) => ({ ...current, apiKey: e.target.value }))}
+                      disabled={readOnly}
+                      className={inputClass}
+                      placeholder={selectedProfile?.api_key_masked ? "Saved — leave blank to keep it" : "Paste API key"}
+                    />
+                  </label>
 
-          <div className="mt-auto flex flex-wrap items-center justify-between gap-4 border-t border-line/80 pt-8">
-            <div className="min-h-[24px] flex-1 text-[13px]">
-              {loading && (
-                <span className="inline-flex items-center gap-2 text-muted">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading models…
-                </span>
+                  {isCustomProvider && (
+                    <label className="block space-y-1.5">
+                      <span className={labelClass}>Display name</span>
+                      <input
+                        value={form.profileLabel}
+                        onChange={(e) => setForm((current) => ({ ...current, profileLabel: e.target.value }))}
+                        disabled={readOnly}
+                        className={inputClass}
+                        placeholder="Name shown in the model list"
+                      />
+                    </label>
+                  )}
+
+                  <label className="block space-y-1.5">
+                    <span className={labelClass}>Model</span>
+                    <div className="relative">
+                      <select
+                        value={form.model}
+                        onChange={(e) => {
+                          const next = optionFor(form.provider, e.target.value);
+                          setForm((current) => ({
+                            ...current,
+                            model: next.value,
+                            customModel: next.custom ? current.customModel : "",
+                            apiBase: next.endpoint || current.apiBase,
+                          }));
+                        }}
+                        disabled={readOnly}
+                        className={cn(inputClass, "appearance-none pr-10")}
+                      >
+                        {MODEL_OPTIONS[form.provider].map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                    </div>
+                  </label>
+
+                  {usesCustomModelInput && (
+                    <label className="block space-y-1.5">
+                      <span className={labelClass}>Model ID</span>
+                      <input
+                        value={form.customModel}
+                        onChange={(e) => setForm((current) => ({ ...current, customModel: e.target.value }))}
+                        disabled={readOnly}
+                        className={inputClass}
+                        placeholder={CUSTOM_MODEL_PLACEHOLDER[form.provider]}
+                      />
+                    </label>
+                  )}
+                </>
               )}
-              {!loading && error && <span className="text-danger">{error}</span>}
-              {!loading && !error && message && <span className="text-accent">{message}</span>}
+
+              <div className="min-h-[20px] text-[12.5px] leading-5">
+                {loading && (
+                  <span className="inline-flex items-center gap-2 text-muted">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Loading models…
+                  </span>
+                )}
+                {!loading && error && <span className="text-danger">{error}</span>}
+                {!loading && !error && message && <span className={deletePending ? "text-danger" : "text-accent"}>{message}</span>}
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {selectedProfile && !readOnly && (
+            <footer className="flex items-center gap-2 border-t border-line/70 px-6 py-4">
+              {selectedProfile && !readOnly && !deletePending && (
                 <button
                   type="button"
                   onClick={handleDelete}
-                  disabled={saving || deletePending}
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-[18px] border px-6 py-3 text-[14px] text-danger transition disabled:opacity-45",
-                    deletePending ? "border-danger bg-danger-soft" : "border-danger/30 bg-card hover:bg-danger/5",
-                  )}
-                >
-                  {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  Delete
-                </button>
-              )}
-              {selectedProfile && data?.default_model_id !== selectedProfile.id && !readOnly && !deletePending && (
-                <button
-                  type="button"
-                  onClick={handleSetDefault}
                   disabled={saving}
-                  className="inline-flex items-center rounded-[18px] border border-line bg-card px-6 py-3 text-[14px] text-ink transition hover:bg-hover disabled:opacity-45"
+                  title="Delete this model"
+                  aria-label="Delete this model"
+                  className="-ml-2 flex h-9 w-9 items-center justify-center rounded-full text-faint transition hover:bg-danger-soft hover:text-danger disabled:opacity-45"
                 >
-                  Set as default
+                  <Trash2 className="h-4 w-4" />
                 </button>
               )}
-              {deletePending && (
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  disabled={saving}
-                  className="inline-flex items-center rounded-[18px] border border-line bg-card px-6 py-3 text-[14px] text-ink transition hover:bg-hover disabled:opacity-45"
-                >
-                  Cancel
-                </button>
-              )}
+              <div className="flex-1" />
               <button
                 type="button"
-                onClick={handleSave}
-                disabled={confirmDisabled}
-                className={cn(
-                  "inline-flex items-center rounded-[18px] px-6 py-3 text-[14px] font-medium text-white transition hover:opacity-92 disabled:opacity-45",
-                  deletePending ? "bg-danger" : "bg-[#2f3b4f]",
-                )}
+                onClick={handleCancel}
+                disabled={saving && !deletePending}
+                className="rounded-full px-4 py-2 text-[13.5px] font-medium text-muted transition hover:bg-hover hover:text-ink disabled:opacity-45"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                <span className={cn(saving && "ml-2")}>{deletePending ? "Confirm Delete" : "Confirm"}</span>
+                Cancel
               </button>
-            </div>
-          </div>
-        </section>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={demoSelected ? () => void handleConnectDemoModel() : () => void handleSave()}
+                  disabled={confirmDisabled || loading}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13.5px] font-medium text-white transition hover:opacity-90 disabled:opacity-45",
+                    deletePending ? "bg-danger" : "bg-invert",
+                  )}
+                >
+                  {(saving || demoConnecting || deleting) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {deletePending ? "Delete" : demoSelected ? "Connect demo" : selectedProfile ? "Save" : "Connect"}
+                </button>
+              )}
+            </footer>
+          </>
+        )}
       </div>
     </div>
   );

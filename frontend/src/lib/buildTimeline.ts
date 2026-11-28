@@ -28,6 +28,8 @@ export type AgentEvent =
   | { type: "tool_call"; id?: string; name: string; args?: Record<string, unknown> }
   | { type: "tool_result"; id?: string; name: string; result: unknown }
   | { type: "clarification_request"; question: string }
+  | { type: "clarification_answer"; answer: string }
+  | { type: "runtime_status"; status: "running" | "waiting_user" }
   | { type: "final_answer"; text?: string; sql?: string | null; result?: string | null }
   | { type: "error"; message: string }
   | { type: "done" };
@@ -42,7 +44,25 @@ export function buildTimeline(events: RawAgentEvent[] | undefined | null): Timel
   if (!events || events.length === 0) return [];
   const timeline: TimelineEvent[] = [];
 
+  const bridgedQuestions: string[] = [];
+  const bridgedCallIds = new Set<string>();
   for (const e of events) {
+    if (e.type === "clarification_request") {
+      const lastAsk = [...timeline].reverse().find((item) =>
+        item.kind === "tool_call" && (item.name === "ask" || item.name === "ask_user"));
+      const lastAnswer = [...timeline].reverse().find((item) =>
+        item.kind === "tool_response" && (item.name === "ask" || item.name === "ask_user"));
+      if (!lastAsk || lastAsk.kind !== "tool_call" || lastAsk.args.question !== e.question ||
+          (lastAnswer && timeline.indexOf(lastAnswer) > timeline.indexOf(lastAsk))) {
+        timeline.push({ kind: "tool_call", name: "ask_user", args: { question: e.question } });
+        bridgedQuestions.push(e.question);
+      }
+      continue;
+    }
+    if (e.type === "clarification_answer") {
+      timeline.push({ kind: "tool_response", name: "ask_user", response: e.answer });
+      continue;
+    }
     if (e.type === "user_message") {
       timeline.push({ kind: "user_msg", text: "text" in e ? e.text : e.message ?? "" });
       continue;
@@ -52,8 +72,24 @@ export function buildTimeline(events: RawAgentEvent[] | undefined | null): Timel
         const text = (e.text ?? "").trim();
         if (text) timeline.push(e.final ? { kind: "final", text } : { kind: "thinking", text });
       } else if (e.type === "tool_call") {
+        // The IPC bridge publishes ask immediately; the agent trajectory may
+        // replay the same call later. Keep one question and one answer.
+        const bridged = (e.name === "ask" || e.name === "ask_user")
+          ? bridgedQuestions.indexOf(String(e.args?.question ?? "")) : -1;
+        if (bridged >= 0) {
+          bridgedQuestions.splice(bridged, 1);
+          if (e.id) bridgedCallIds.add(e.id);
+          continue;
+        }
         timeline.push({ kind: "tool_call", name: e.name ?? "?", args: e.args ?? {}, id: e.id });
       } else if (e.type === "tool_result") {
+        if (e.id && bridgedCallIds.has(e.id)) continue;
+        if (e.name === "ask" || e.name === "ask_user") {
+          const previous = [...timeline].reverse().find((item) =>
+            (item.kind === "tool_call" || item.kind === "tool_response") &&
+            (item.name === "ask" || item.name === "ask_user"));
+          if (previous?.kind === "tool_response") continue;
+        }
         const result = e.result;
         timeline.push({
           kind: "tool_response",

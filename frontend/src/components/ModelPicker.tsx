@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
-import { Anthropic, Gemini, Minimax, OpenAI, XAI, ZAI } from "@lobehub/icons";
+import { Anthropic, Gemini, Kimi, Minimax, OpenAI, XAI, ZAI } from "@lobehub/icons";
 import { Check, ChevronDown, Plus, Settings2, Sparkles } from "lucide-react";
 import { useModels } from "../state/modelContext";
+import { useOpenSettings } from "../state/settingsContext";
 import { cn } from "../lib/cn";
 
 const PROVIDER_LOGO: Record<string, ComponentType<{ size: number }>> = {
@@ -11,6 +12,7 @@ const PROVIDER_LOGO: Record<string, ComponentType<{ size: number }>> = {
   zai: ZAI.Avatar,
   openai: OpenAI.Avatar,
   xai: XAI.Avatar,
+  kimi: Kimi.Avatar,
 };
 
 export function ModelPicker(props: {
@@ -23,6 +25,7 @@ export function ModelPicker(props: {
   onOpenConfig?: () => void;
 }) {
   const { models, selectedId, setSelectedId } = useModels();
+  const openSettings = useOpenSettings();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const selected = models.find((m) => m.id === selectedId) ?? models[0] ?? null;
@@ -53,15 +56,15 @@ export function ModelPicker(props: {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        title="Change model"
-        onClick={() => selected && setOpen((value) => !value)}
+        title={selected ? "Change model" : "Select a model"}
+        onClick={() => (selected ? setOpen((value) => !value) : props.onOpenConfig?.())}
         className={cn(
           variant === "inline"
             ? "flex min-w-[104px] items-center gap-2 rounded-full px-2 py-2 text-left text-[13.5px] transition hover:bg-hover"
             : "flex min-w-[180px] items-center gap-2 rounded-full border border-line bg-surface px-3 py-2 text-left text-[12px] shadow-sm transition",
           variant === "inline"
-            ? selected ? "text-ink" : "cursor-default opacity-95"
-            : selected ? (open ? "border-accent/30 bg-card" : "hover:bg-hover") : "cursor-default opacity-95",
+            ? selected || props.onOpenConfig ? "text-ink" : "cursor-default opacity-95"
+            : selected || props.onOpenConfig ? (open ? "border-accent/30 bg-card" : "hover:bg-hover") : "cursor-default opacity-95",
           props.buttonClassName,
         )}
       >
@@ -76,7 +79,7 @@ export function ModelPicker(props: {
           variant === "inline" ? "font-medium" : "font-semibold",
           variant === "inline" ? "text-muted" : selected ? "text-accent" : "text-muted",
         )}>
-          {selected?.label ?? "Set up model"}
+          {selected?.label ?? "Select a model"}
         </span>
         {selected && <ChevronDown className={cn(variant === "inline" ? "h-[15px] w-[15px]" : "h-3.5 w-3.5", "shrink-0 text-muted transition", open && "rotate-180")} />}
       </button>
@@ -143,7 +146,8 @@ export function ModelPicker(props: {
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  props.onOpenConfig?.();
+                  if (openSettings) openSettings("models", { addModel: true });
+                  else props.onOpenConfig?.();
                 }}
                 className={cn(
                   "mt-1 flex items-center gap-2 border-t border-line px-3 text-left font-semibold text-muted transition hover:text-ink",

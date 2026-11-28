@@ -3,7 +3,7 @@ import type { DataEngine } from "../api/bff";
 export type BundledModelProfile = {
   id?: string;
   label: string;
-  provider: "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "ollama";
+  provider: "openai" | "gemini" | "zai" | "anthropic" | "minimax" | "xai" | "kimi" | "ollama";
   model: string;
   apiKey: string;
   apiBase: string;

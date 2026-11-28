@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import HTTPException, Query, Request
+from fastapi import HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
 from runtime.runtime import DbAgentRuntime
@@ -856,13 +856,15 @@ def _validate_profile_payload(
         raise HTTPException(400, "Anthropic models must start with claude- or anthropic/")
     if provider == "minimax" and not model.startswith("minimax/"):
         raise HTTPException(400, "MiniMax models must start with minimax/")
+    if provider == "kimi" and not model.startswith("openai/"):
+        raise HTTPException(400, "Kimi models should use an OpenAI-compatible model string")
     if provider == "xai" and not model.startswith("xai/"):
         raise HTTPException(400, "xAI models must start with xai/")
     if provider == "ollama" and not model.startswith("ollama_chat/"):
         raise HTTPException(400, "Ollama models must start with ollama_chat/")
     if provider != "ollama" and provider != "other" and not api_key:
         raise HTTPException(400, "api_key is required")
-    if provider in {"zai", "minimax", "xai", "ollama"} and not api_base:
+    if provider in {"zai", "minimax", "xai", "kimi", "ollama"} and not api_base:
         raise HTTPException(400, "api_base is required")
     if provider == "other" and not api_key and not api_base:
         raise HTTPException(400, "api_key or api_base is required")
@@ -1407,6 +1409,8 @@ async def turn(req: TurnRequest):
         )
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
 
 
 async def answer_user(req: AnswerUserRequest):
@@ -1612,6 +1616,13 @@ def _sse_event(index: int, event: dict[str, Any]) -> bytes:
 async def events_proxy(task_id: str, request: Request):
     """Stream dbagent runtime events to the browser."""
 
+    try:
+        AGENT_RUNTIME.public_state(task_id)
+    except KeyError:
+        # An open-forever stream for a dead task holds one of the browser's
+        # six per-host connections; fail fast instead.
+        raise HTTPException(404, f"unknown task {task_id}") from None
+
     async def gen():
         last_seen = _parse_last_event_id(request.headers.get("last-event-id"))
         q = await AGENT_RUNTIME.event_bus.subscribe(task_id)
@@ -1647,6 +1658,99 @@ async def events_proxy(task_id: str, request: Request):
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
     })
+
+
+# Browser origins allowed to open the event socket. CORS doesn't apply to
+# WebSockets, so without this any web page could read agent events from
+# localhost. "null" is the Electron file:// origin; no Origin = non-browser.
+_WS_ALLOWED_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173", "null"}
+_WS_PING_SECONDS = 20.0
+
+
+async def events_socket(websocket: WebSocket):
+    """One WebSocket per browser tab, multiplexing the events of many tasks.
+
+    Client -> server:
+      {"op": "subscribe", "task_id": "...", "after": <last index seen, -1 for all>}
+      {"op": "unsubscribe", "task_id": "..."}
+    Server -> client:
+      {"task_id": "...", "index": n, "event": {...}}   replayed, then live
+      {"task_id": "...", "type": "not_found"}         unknown task (e.g. after a backend restart)
+      {"type": "ping"}                                 keepalive when idle
+
+    Replaces one SSE stream per task: browsers allow only six HTTP/1.1
+    connections per host, so many running chats starved every other request.
+    """
+    origin = websocket.headers.get("origin")
+    if origin is not None and origin not in _WS_ALLOWED_ORIGINS:
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
+
+    outbox: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    forwarders: dict[str, asyncio.Task] = {}
+
+    async def forward(task_id: str, after: int) -> None:
+        bus = AGENT_RUNTIME.event_bus
+        q = await bus.subscribe(task_id)  # subscribe before replay so nothing slips between
+        try:
+            try:
+                replay = list(AGENT_RUNTIME.public_state(task_id).get("agent_events") or [])
+            except KeyError:
+                await outbox.put({"task_id": task_id, "type": "not_found"})
+                return
+            high_water = after
+            for index, evt in enumerate(replay):
+                if index > high_water:
+                    await outbox.put({"task_id": task_id, "index": index, "event": evt})
+                    high_water = index
+            while True:
+                item = await q.get()
+                if item.index > high_water:
+                    await outbox.put({"task_id": task_id, "index": item.index, "event": item.payload})
+                    high_water = item.index
+        finally:
+            bus.unsubscribe(task_id, q)
+
+    def stop(task_id: str) -> None:
+        task = forwarders.pop(task_id, None)
+        if task:
+            task.cancel()
+
+    async def writer() -> None:
+        while True:
+            try:
+                msg = await asyncio.wait_for(outbox.get(), timeout=_WS_PING_SECONDS)
+            except asyncio.TimeoutError:
+                msg = {"type": "ping"}
+            await websocket.send_text(json.dumps(msg, default=str))
+
+    writer_task = asyncio.create_task(writer())
+    try:
+        while True:
+            try:
+                msg = json.loads(await websocket.receive_text())
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(msg, dict):
+                continue
+            task_id = msg.get("task_id")
+            if not isinstance(task_id, str) or not task_id:
+                continue
+            if msg.get("op") == "subscribe":
+                after = msg.get("after")
+                stop(task_id)
+                forwarders[task_id] = asyncio.create_task(
+                    forward(task_id, after if isinstance(after, int) else -1)
+                )
+            elif msg.get("op") == "unsubscribe":
+                stop(task_id)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        writer_task.cancel()
+        for task_id in list(forwarders):
+            stop(task_id)
 
 
 async def session_snapshot(task_id: str):

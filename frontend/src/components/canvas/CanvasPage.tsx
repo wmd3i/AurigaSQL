@@ -16,8 +16,9 @@ import {
   type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, ChevronsDown, ChevronsUp, Clock3, Database, Home, Maximize2, Minimize2, Pause, Plus, RotateCcw, Scan, Settings2, Sparkles, Unplug } from "lucide-react";
+import { ChevronsDown, ChevronsUp, Clock3, Database, GitBranch, Home, Maximize2, Minimize2, Pause, Plus, RotateCcw, Scan, Settings2, Sparkles, Unplug } from "lucide-react";
 import { CanvasRail } from "./CanvasRail";
+import { CanvasZoomControl } from "./CanvasZoomControl";
 import { CanvasInspector } from "./CanvasInspector";
 import { CanvasSchemaPanel } from "./CanvasSchemaPanel";
 import { FlowModeSwitch } from "../FlowModeSwitch";
@@ -32,6 +33,7 @@ import { ThreadNodeCard, type CardContent, type CardData, type CardNode } from "
 import { FloatingDraftNode, type FloatingDraftNodeT } from "./FloatingDraftNode";
 import type { BranchTarget } from "./CanvasComposer";
 import type { CanvasToneId } from "../../lib/canvasTones";
+import { conversationWorkId } from "../../lib/conversationHistory";
 import { resolveCanvasRowY } from "../../lib/canvasLayout";
 
 const COLUMN_W = 384;
@@ -86,17 +88,8 @@ const nodeTypes = {
   floatingDraft: FloatingDraftNode,
 };
 
-const ZOOM_PRESETS = [60, 75, 80, 90, 100, 110, 125, 150];
-
 function canvasWorkKey(conversationsById: Map<string, Conversation>, conv: Conversation) {
-  if (conv.canvasWorkId) return conv.canvasWorkId;
-  let current: Conversation | undefined = conv;
-  const seen = new Set<string>();
-  while (current?.parentThreadId && !seen.has(current.id)) {
-    seen.add(current.id);
-    current = conversationsById.get(current.parentThreadId);
-  }
-  return current?.id ?? conv.id;
+  return conversationWorkId([...conversationsById.values()], conv);
 }
 
 function estimateHeight(tn: CardContent): number {
@@ -362,14 +355,15 @@ function CanvasInner(props: {
   canvasDb: string;
   activeId: string | null;
   onStart: (database: string, query: string, branchTarget?: BranchTarget | null, canvasTone?: CanvasToneId) => Promise<boolean | void>;
-  onAnswer: (id: string, text: string) => void;
+  onAnswer: (id: string, text: string) => void | Promise<void>;
   onStop: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onRevertConversation?: (id: string, nodeId: string) => void;
   onNewFlow: () => void;
   onStartOverWorkspace?: () => void;
   workspaceResetToken?: number;
-  backToResult?: () => void;
+  onShowChat: () => void;
+  onSelectConversation: (id: string) => void;
   embedded?: boolean;
   hideModeSwitch?: boolean;
   transitionPhase?: "enter" | "exit" | null;
@@ -416,11 +410,14 @@ function CanvasInner(props: {
   const [canvasHint, setCanvasHint] = useState<string | null>(null);
   const seededEmptyDraftRef = useRef(false);
   const lastActiveFocusRef = useRef<string | null>(null);
-  const lastWorkspaceResetTokenRef = useRef(props.workspaceResetToken);
+  const centeredInitialDraftRef = useRef<string | null>(null);
   const canvasHostRef = useRef<HTMLElement | null>(null);
 
   const threadNodes = useCallback((conv: Conversation): CardContent[] => {
     const base = buildNodes(conv.timeline, conv.title);
+    if (conv.pendingQuestion && !base.some((node) => node.kind === "agent_question" && node.body === conv.pendingQuestion && node.answer === undefined)) {
+      base.push({ id: "pending-question", kind: "agent_question", body: conv.pendingQuestion });
+    }
     const tail = syntheticTail(conv);
     const nodes = [...base, ...(tail ? [tail] : [])];
     return nodes.filter((node) => !isRedundantFinalTextNode(node, nodes));
@@ -436,19 +433,6 @@ function CanvasInner(props: {
   useEffect(() => {
     setFocusThreadId(props.activeId);
   }, [props.activeId]);
-
-  useEffect(() => {
-    if (lastWorkspaceResetTokenRef.current === props.workspaceResetToken) return;
-    lastWorkspaceResetTokenRef.current = props.workspaceResetToken;
-    setFocusThreadId(null);
-    setPendingFloatingSpawn(null);
-    setBranchDrafts([]);
-    setSelectedBranchDraftId(null);
-    setInspectedTool(null);
-    setDetailOpen(false);
-    setNodes((current) => current.map((node) => ({ ...node, selected: false })));
-    seededEmptyDraftRef.current = false;
-  }, [props.workspaceResetToken, setNodes]);
 
   const allConversationById = useMemo(
     () => new Map(props.conversations.map((conv) => [conv.id, conv])),
@@ -472,6 +456,13 @@ function CanvasInner(props: {
   const activeConv = useMemo(
     () => visibleConversations.find((c) => c.id === focusThreadId) ?? visibleConversations[0] ?? null,
     [visibleConversations, focusThreadId],
+  );
+  const selectedDataSource = useMemo(
+    () =>
+      activeConv?.source ??
+      props.dataSources?.find((source) => source.id === props.selectedDataSourceId && source.ready) ??
+      null,
+    [activeConv?.source, props.dataSources, props.selectedDataSourceId],
   );
   const runningConversation = useMemo(() => {
     if (activeConv && isRunningConversation(activeConv)) return activeConv;
@@ -510,10 +501,6 @@ function CanvasInner(props: {
   }, [selectedNode]);
 
   const zoomPercent = Math.round(zoom * 100);
-  const zoomOptions = useMemo(
-    () => (ZOOM_PRESETS.includes(zoomPercent) ? ZOOM_PRESETS : [...ZOOM_PRESETS, zoomPercent].sort((a, b) => a - b)),
-    [zoomPercent],
-  );
 
   useEffect(() => {
     if (!pendingFloatingSpawn) return;
@@ -932,6 +919,17 @@ function CanvasInner(props: {
   }, [focusCanvasNodes, rf]);
 
   const focusedCanvasThreadId = focusThreadId ?? props.activeId ?? null;
+  // Center the initial composer after React Flow has measured its actual size.
+  useEffect(() => {
+    const initialDraft = floatingDrafts.find((draft) => draft.id.startsWith("draft-thread:initial:"));
+    if (focusedCanvasThreadId || !nodesInitialized || !initialDraft || centeredInitialDraftRef.current === initialDraft.id) return;
+    const frame = requestAnimationFrame(() => {
+      centeredInitialDraftRef.current = initialDraft.id;
+      focusCanvasNodes([initialDraft.id], { maxZoom: 1, upperBias: 0, duration: 0 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [floatingDrafts, focusedCanvasThreadId, focusCanvasNodes, nodesInitialized]);
+
   // Refit after content has been measured, including sibling threads and composers.
   // Positions are deliberately excluded so dragging cards does not trigger a refit.
   const canvasContentSignature = nodes
@@ -1092,7 +1090,7 @@ function CanvasInner(props: {
             selected: existing?.selected,
             data: {
               tn,
-              pulse: tn.kind === "agent_question" && conv.pendingQuestion !== null && isLast,
+              pulse: tn.kind === "agent_question" && tn.body === conv.pendingQuestion && tn.answer === undefined,
               footer: isLast && conv.status === "done" ? { state: "ended" } : null,
               branchOrigin: gi === 0 && branchOrigin ? branchOrigin : undefined,
               canvasTone: gi === 0 && tn.kind === "question" ? conv.canvasTone : undefined,
@@ -1128,12 +1126,14 @@ function CanvasInner(props: {
                     }
                   : undefined,
               onAnswer:
-                tn.kind === "agent_question" && conv.pendingQuestion !== null && isLast
+                tn.kind === "agent_question" && tn.body === conv.pendingQuestion && tn.answer === undefined
                   ? (text) => props.onAnswer(conv.id, text)
                   : undefined,
               onInspectTool:
                 tn.kind === "tool_group"
                   ? (tool, openDetail = false) => {
+                      props.onSelectConversation(conv.id);
+                      setFocusThreadId(conv.id);
                       setInspectedTool({ parentId: id, tool });
                       setDetailOpen((open) => openDetail || open);
                       setNodes((current) => current.map((item) => ({ ...item, selected: item.id === id })));
@@ -1235,6 +1235,8 @@ function CanvasInner(props: {
 
   const onNodeClick: NodeMouseHandler<CanvasNode> = (_, node) => {
     if (node.type !== "card") return;
+    props.onSelectConversation(node.id.split(":")[0]);
+    setFocusThreadId(node.id.split(":")[0]);
     setInspectedTool(null);
     setDetailOpen((open) => open && opensInspector(node.data.tn));
     setNodes((current) => current.map((item) => ({ ...item, selected: item.id === node.id })));
@@ -1242,12 +1244,15 @@ function CanvasInner(props: {
 
   const onNodeDoubleClick: NodeMouseHandler<CanvasNode> = (_, node) => {
     if (node.type !== "card") return;
+    props.onSelectConversation(node.id.split(":")[0]);
+    setFocusThreadId(node.id.split(":")[0]);
     setInspectedTool(null);
     setDetailOpen(opensInspector(node.data.tn));
     setNodes((current) => current.map((item) => ({ ...item, selected: item.id === node.id })));
   };
 
   function focusThread(id: string) {
+    props.onSelectConversation(id);
     setFocusThreadId(id);
     setLeftPanel(null);
     const ids = nodes.filter((n) => n.id.startsWith(`${id}:`)).map((n) => n.id);
@@ -1255,6 +1260,7 @@ function CanvasInner(props: {
   }
 
   function focusNode(canvasId: string) {
+    props.onSelectConversation(canvasId.split(":")[0]);
     setFocusThreadId(canvasId.split(":")[0]);
     setInspectedTool(null);
     setDetailOpen(true);
@@ -1331,8 +1337,8 @@ function CanvasInner(props: {
             </button>
             <button
               onClick={props.onOpenLlmConfig}
-              title="Setup model"
-              aria-label="Setup model"
+              title="Model settings"
+              aria-label="Model settings"
               className={cn(
                 "flex items-center justify-center text-muted transition-colors hover:bg-hover hover:text-ink",
                 props.embedded ? "mt-2.5 h-9 w-9 rounded-[16px]" : "mt-3 h-11 w-11 rounded-[20px]",
@@ -1471,7 +1477,8 @@ function CanvasInner(props: {
                     />
                   ) : (
                     <CanvasSchemaPanel
-                      canvasDb={activeConv?.database ?? props.canvasDb}
+                      canvasDb={activeConv?.database ?? selectedDataSource?.display_name ?? props.canvasDb}
+                      source={selectedDataSource}
                       conversations={props.conversations}
                       activeId={focusThreadId}
                       panelWidth={leftPanelWidth}
@@ -1489,7 +1496,7 @@ function CanvasInner(props: {
               onNodeClick={onNodeClick}
               onNodeDoubleClick={onNodeDoubleClick}
               minZoom={0.2}
-              maxZoom={1.5}
+              maxZoom={2}
               panOnScroll
               panOnScrollMode={PanOnScrollMode.Free}
               zoomOnScroll={false}
@@ -1508,7 +1515,7 @@ function CanvasInner(props: {
                       type="button"
                       onClick={props.onConnectData}
                       title="Add a database or file to query"
-                      className="rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-invert-ink transition hover:opacity-90"
+                      className="rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-accent-ink transition hover:opacity-90"
                     >
                       Connect data
                     </button>
@@ -1516,32 +1523,32 @@ function CanvasInner(props: {
                 </div>
               </Panel>
             )}
-            {props.backToResult && !props.hideModeSwitch && (
-              <Panel position="top-left" className="flex items-center gap-2">
+            {!props.hideModeSwitch && (
+              <Panel position="top-left" className="flex flex-wrap items-center gap-2">
                 <FlowModeSwitch
                   mode="workspace"
                   onModeChange={(mode) => {
-                    if (mode === "agent") props.onNewFlow();
+                    if (mode === "agent") props.onShowChat();
                   }}
                 />
-                <button
-                  onClick={props.backToResult}
-                  title="Return to the result view"
-                  className="flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[12px] font-medium text-ink shadow-sm hover:bg-hover"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Back to result
-                </button>
-              </Panel>
-            )}
-            {!props.backToResult && !props.hideModeSwitch && (
-              <Panel position="top-left">
-                <FlowModeSwitch
-                  mode="workspace"
-                  onModeChange={(mode) => {
-                    if (mode === "agent") props.onNewFlow();
-                  }}
-                />
+                {selectedDataSource && (
+                  <button
+                    type="button"
+                    aria-pressed={leftPanel === "schema"}
+                    onClick={() => toggleLeftPanel("schema")}
+                    title={`Inspect ${selectedDataSource.display_name} schema`}
+                    className={cn(
+                      "inline-flex h-10 items-center gap-2 rounded-full border px-3.5 text-[12.5px] font-medium shadow-sm transition",
+                      leftPanel === "schema"
+                        ? "border-accent bg-accent-soft text-accent"
+                        : "border-line bg-card/95 text-ink hover:bg-hover",
+                    )}
+                  >
+                    <DialectIcon dialect={selectedDataSource.engine} className="h-4 w-4" />
+                    <span className="max-w-[160px] truncate">{selectedDataSource.display_name}</span>
+                    <GitBranch className="h-3.5 w-3.5 text-muted" />
+                  </button>
+                )}
               </Panel>
             )}
             <Panel
@@ -1597,21 +1604,11 @@ function CanvasInner(props: {
                 >
                   <Scan className={props.embedded ? "h-3.5 w-3.5" : "h-4 w-4"} />
                 </button>
-                <select
-                  aria-label="Canvas zoom"
-                  value={zoomPercent}
-                  onChange={(e) => void rf.zoomTo(Number(e.target.value) / 100, { duration: 180 })}
-                  className={cn(
-                    "rounded-lg border border-transparent bg-transparent px-1 font-semibold text-ink focus:border-line focus:outline-none",
-                    props.embedded ? "py-0.5 text-[12px]" : "py-1 text-[13px]",
-                  )}
-                >
-                  {zoomOptions.map((pct) => (
-                    <option key={pct} value={pct}>
-                      {pct}%
-                    </option>
-                  ))}
-                </select>
+                <CanvasZoomControl
+                  percent={zoomPercent}
+                  embedded={props.embedded}
+                  onChange={(percent) => void rf.zoomTo(percent / 100, { duration: 180 })}
+                />
               </div>
               <div className={cn("w-px bg-line", props.embedded ? "h-6" : "h-7")} />
               <button
@@ -1662,7 +1659,8 @@ function CanvasInner(props: {
 
 export function CanvasPage(props: Parameters<typeof CanvasInner>[0]) {
   return (
-    <ReactFlowProvider>
+    // Reset local drafts, layout, selection, and viewport; history lives in App.
+    <ReactFlowProvider key={props.workspaceResetToken}>
       <CanvasInner {...props} />
     </ReactFlowProvider>
   );
