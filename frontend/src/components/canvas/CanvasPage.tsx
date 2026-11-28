@@ -28,20 +28,24 @@ import type { ThreadNode } from "../../lib/buildNodes";
 import { cardLabel } from "./cardKind";
 import { cn } from "../../lib/cn";
 import type { DataSource } from "../../api/bff";
-import type { Conversation } from "../../state/types";
+import type { CanvasBranchSide, Conversation } from "../../state/types";
 import { ThreadNodeCard, type CardContent, type CardData, type CardNode } from "./ThreadNodeCard";
 import { FloatingDraftNode, type FloatingDraftNodeT } from "./FloatingDraftNode";
 import type { BranchTarget } from "./CanvasComposer";
 import type { CanvasToneId } from "../../lib/canvasTones";
 import { conversationWorkId } from "../../lib/conversationHistory";
 import { resolveCanvasRowY } from "../../lib/canvasLayout";
+import {
+  BRANCH_GAP_Y,
+  BRANCH_MIN_X_OFFSET,
+  BRANCH_X_PADDING,
+  branchPosition,
+  resolveAnchorCanvasId,
+  sideSiblingIndex,
+} from "../../lib/branchPlacement";
 
 const COLUMN_W = 384;
 const GAP_Y = 50;
-const BRANCH_MIN_X_OFFSET = 500;
-const BRANCH_X_PADDING = 180;
-const BRANCH_GAP_Y = 36;
-const BRANCH_SIBLING_Y = 132;
 const MINI_RAIL_W = 56;
 const LEFT_PANEL_BASE_X = 96;
 const DEFAULT_LEFT_PANEL_W = 520;
@@ -187,6 +191,24 @@ function buildThreadGroups(nodes: CardContent[]): ThreadGroup[] {
 
 function isCardNode(node: CanvasNode): node is CardNode {
   return node.type === "card";
+}
+
+/** Canvas id of the card a branch thread hangs from (Error card while it exists, see resolveAnchorCanvasId). */
+function branchAnchorCanvasId(
+  conv: Conversation,
+  parent: Conversation | undefined,
+  threadNodes: (conv: Conversation) => CardContent[],
+): string | null {
+  if (!conv.parentThreadId || !conv.parentNodeId) return null;
+  if (!parent) return `${conv.parentThreadId}:${conv.parentNodeId}`;
+  const groups = buildThreadGroups(threadNodes(parent));
+  const cardIds = groups.map((group) => `${parent.id}:${groupCardContent(group.nodes).id}`);
+  return resolveAnchorCanvasId(
+    parent.id,
+    cardIds,
+    { parentNodeId: conv.parentNodeId, parentAnchorError: conv.parentAnchorError },
+    (nodeId) => canvasNodeIdForThreadNode(parent.id, groups, nodeId),
+  );
 }
 
 function opensInspector(tn: CardContent) {
@@ -719,15 +741,13 @@ function CanvasInner(props: {
     setExpandAllToken((current) => current + 1);
   }
 
-  const branchCounts = useMemo(() => {
-    const out = new Map<string, number>();
+  /** Anchor canvas id → committed branches per side, in canvas order. */
+  const branchesByAnchor = useMemo(() => {
+    const out = new Map<string, Array<{ id: string; side: CanvasBranchSide; parentNodeId: string }>>();
     visibleConversations.forEach((conv) => {
-      if (!conv.parentThreadId || !conv.parentNodeId) return;
-      const parent = allConversationById.get(conv.parentThreadId);
-      const key = parent
-        ? canvasNodeIdForThreadNode(conv.parentThreadId, buildThreadGroups(threadNodes(parent)), conv.parentNodeId)
-        : `${conv.parentThreadId}:${conv.parentNodeId}`;
-      out.set(key, (out.get(key) ?? 0) + 1);
+      const key = branchAnchorCanvasId(conv, conv.parentThreadId ? allConversationById.get(conv.parentThreadId) : undefined, threadNodes);
+      if (!key || !conv.parentNodeId) return;
+      out.set(key, [...(out.get(key) ?? []), { id: conv.id, side: conv.canvasBranchSide ?? "right", parentNodeId: conv.parentNodeId }]);
     });
     return out;
   }, [allConversationById, threadNodes, visibleConversations]);
@@ -739,16 +759,9 @@ function CanvasInner(props: {
 
   const childThreadsByAnchor = useMemo(() => {
     const out = new Map<string, string[]>();
-    visibleConversations.forEach((conv) => {
-      if (!conv.parentThreadId || !conv.parentNodeId) return;
-      const parent = allConversationById.get(conv.parentThreadId);
-      const key = parent
-        ? canvasNodeIdForThreadNode(conv.parentThreadId, buildThreadGroups(threadNodes(parent)), conv.parentNodeId)
-        : `${conv.parentThreadId}:${conv.parentNodeId}`;
-      out.set(key, [...(out.get(key) ?? []), conv.id]);
-    });
+    branchesByAnchor.forEach((branches, key) => out.set(key, branches.map((branch) => branch.id)));
     return out;
-  }, [allConversationById, threadNodes, visibleConversations]);
+  }, [branchesByAnchor]);
 
   const collectFollowerCardIds = useCallback(
     (canvasNodeId: string) => {
@@ -992,13 +1005,8 @@ function CanvasInner(props: {
         const groups = buildThreadGroups(threadNodes(conv));
         if (groups.length === 0) return;
 
-        const parentForCanvasNode = conv.parentThreadId ? allConversationById.get(conv.parentThreadId) : null;
-        const parentCanvasNodeId =
-          conv.parentThreadId && conv.parentNodeId && parentForCanvasNode
-            ? canvasNodeIdForThreadNode(conv.parentThreadId, buildThreadGroups(threadNodes(parentForCanvasNode)), conv.parentNodeId)
-            : conv.parentThreadId && conv.parentNodeId
-              ? `${conv.parentThreadId}:${conv.parentNodeId}`
-              : null;
+        const parentForCanvasNode = conv.parentThreadId ? allConversationById.get(conv.parentThreadId) ?? null : null;
+        const parentCanvasNodeId = branchAnchorCanvasId(conv, parentForCanvasNode ?? undefined, threadNodes);
         const parentCandidate = parentCanvasNodeId ? byId.get(parentCanvasNodeId) : null;
         const parentNode = parentCandidate?.type === "card" ? parentCandidate as CardNode : null;
         const parentAnchorNode =
@@ -1006,44 +1014,26 @@ function CanvasInner(props: {
             ? threadNodes(parentForCanvasNode).find((node) => node.id === conv.parentNodeId) ?? null
             : null;
         const branchOrigin = parentAnchorNode ? { label: cardLabel(parentAnchorNode), kind: conv.canvasBranchSide === "below" ? ("follow_up" as const) : ("fork" as const) } : null;
-        const siblingCount = parentCanvasNodeId ? branchCounts.get(parentCanvasNodeId) ?? 1 : 0;
-        const branchIndex =
-          parentCanvasNodeId && siblingCount > 0
-            ? ordered
-                .filter((c) => {
-                  if (!c.parentThreadId || !c.parentNodeId || c.parentThreadId !== conv.parentThreadId) return false;
-                  const parent = allConversationById.get(c.parentThreadId);
-                  if (!parent) return false;
-                  return canvasNodeIdForThreadNode(c.parentThreadId, buildThreadGroups(threadNodes(parent)), c.parentNodeId) === parentCanvasNodeId;
-                })
-                .findIndex((c) => c.id === conv.id)
-            : -1;
+        const side: CanvasBranchSide = conv.canvasBranchSide ?? "right";
+        const siblingIndex = parentCanvasNodeId
+          ? Math.max(0, sideSiblingIndex(branchesByAnchor.get(parentCanvasNodeId) ?? [], conv.id))
+          : 0;
         const floatingPosition =
           !parentCanvasNodeId ? floatingThreadPositions[conv.id] : undefined;
-        const isFollowUpBranch = conv.canvasBranchSide === "below";
-        const parentWidth = parentNode ? cardWidth(parentNode.data.tn) : CARD_W;
-        const parentHeight = parentNode
-          ? nodeHeights[parentNode.id] ?? estimateHeight(parentNode.data.tn)
-          : 0;
-        const branchOffsetX = parentNode
-          ? Math.max(BRANCH_MIN_X_OFFSET, cardWidth(parentNode.data.tn) + BRANCH_X_PADDING)
-          : COLUMN_W;
-        const baseY = parentNode
-          ? isFollowUpBranch
-            ? parentNode.position.y + parentHeight + BRANCH_GAP_Y
-            : parentNode.position.y + Math.max(0, branchIndex) * BRANCH_SIBLING_Y
-          : floatingPosition?.y ?? 40;
-        const baseX = parentNode
-          ? isFollowUpBranch
-            ? parentNode.position.x + parentWidth / 2 - CARD_W / 2
-            : parentNode.position.x + branchOffsetX
-          : floatingPosition?.x ?? columnIndex(conv, ci) * COLUMN_W + 40;
+        const parentRect = parentNode
+          ? {
+              x: parentNode.position.x,
+              y: parentNode.position.y,
+              width: cardWidth(parentNode.data.tn),
+              height: nodeHeights[parentNode.id] ?? estimateHeight(parentNode.data.tn),
+            }
+          : null;
+        const branchBase = parentRect ? branchPosition(side, parentRect, CARD_W, siblingIndex) : null;
+        const baseY = branchBase ? branchBase.y : floatingPosition?.y ?? 40;
+        const baseX = branchBase ? branchBase.x : floatingPosition?.x ?? columnIndex(conv, ci) * COLUMN_W + 40;
         const rowGapY = parentNode ? BRANCH_GAP_Y : GAP_Y;
-        let threadCenterX = parentNode
-          ? isFollowUpBranch
-            ? parentNode.position.x + parentWidth / 2
-            : baseX + CARD_W / 2
-          : baseX + CARD_W / 2;
+        let threadCenterX =
+          parentRect && side === "below" ? parentRect.x + parentRect.width / 2 : baseX + CARD_W / 2;
 
         let cursorY = baseY;
         groups.forEach((group, gi) => {
@@ -1152,7 +1142,7 @@ function CanvasInner(props: {
       return out;
     });
   }, [
-    branchCounts,
+    branchesByAnchor,
     branchDrafts,
     addBranchDraft,
     columnIndex,
