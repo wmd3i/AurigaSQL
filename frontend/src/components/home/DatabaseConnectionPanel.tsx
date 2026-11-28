@@ -253,6 +253,7 @@ export function DatabaseConnectionPanel(props: {
   }
 
   function handleParseUrl() {
+    if (busy !== null) return;
     const preferredLocal = engine === "duckdb" || engine === "sqlite" ? engine : undefined;
     const parsed = parseConnectionUri(pasteUrl, preferredLocal);
     if (!parsed.ok) {
@@ -472,32 +473,26 @@ export function DatabaseConnectionPanel(props: {
               path: path.trim(),
             };
         const result = await bff.updateDatabaseConnection(editing.id, patchPayload);
-        if (draftRevisionRef.current !== requestRevision) return;
-        lastInitializedIdRef.current = result.connection.id;
-        setLastSavedSource(result.connection.source);
-        setPassword("");
-        setClearSavedPassword(false);
-        setMessage("Connection updated");
-        setMessageTone("success");
+        // The server already applied the change: always tell the parent, even if the form moved on.
+        if (draftRevisionRef.current === requestRevision) {
+          lastInitializedIdRef.current = result.connection.id;
+          setLastSavedSource(result.connection.source);
+          setPassword("");
+          setClearSavedPassword(false);
+          setMessage("Connection updated");
+          setMessageTone("success");
+        }
         await (props.onUpdated ? props.onUpdated(result.connection.source) : props.onCreated(result.connection.source));
       } else {
         const result = await bff.createDatabaseConnection({ name: name.trim(), ...buildTestPayload() });
-        if (draftRevisionRef.current !== requestRevision) return;
-        lastInitializedIdRef.current = result.connection.id;
-        setLastSavedSource(result.connection.source);
-        setPassword("");
-        setMessage("Connection saved");
-        setMessageTone("success");
-        if (result.connection.source.ready) {
-          setSavedSchemaLoading(true);
-          bff
-            .databaseSchema(result.connection.source.id)
-            .then((res) => {
-              setSavedSchemaText(res.schema);
-              setSavedSchemaError(null);
-            })
-            .catch((err) => setSavedSchemaError(String(err)))
-            .finally(() => setSavedSchemaLoading(false));
+        // The connection now exists server-side: always tell the parent so it is listed (and not re-created).
+        // The schema is loaded by the editingId effect once the parent selects the new connection.
+        if (draftRevisionRef.current === requestRevision) {
+          lastInitializedIdRef.current = result.connection.id;
+          setLastSavedSource(result.connection.source);
+          setPassword("");
+          setMessage("Connection saved");
+          setMessageTone("success");
         }
         await props.onCreated(result.connection.source);
       }
@@ -801,7 +796,8 @@ export function DatabaseConnectionPanel(props: {
                   <button
                     type="button"
                     onClick={handleParseUrl}
-                    className="inline-flex h-9 shrink-0 items-center rounded-xl bg-accent px-3.5 text-[12px] font-medium text-accent-ink transition hover:opacity-90"
+                    disabled={busy !== null}
+                    className="inline-flex h-9 shrink-0 items-center rounded-xl bg-accent px-3.5 text-[12px] font-medium text-accent-ink transition hover:opacity-90 disabled:opacity-60"
                   >
                     Parse
                   </button>
@@ -814,7 +810,11 @@ export function DatabaseConnectionPanel(props: {
               </div>
             )}
 
-            <div className="space-y-3" onChangeCapture={invalidateDraftResults}>
+            <fieldset
+              disabled={busy !== null}
+              className="m-0 min-w-0 space-y-3 border-0 p-0"
+              onChangeCapture={invalidateDraftResults}
+            >
               <div>
                 <label htmlFor={nameInputId} className="mb-1 block text-[12px] font-medium text-muted">
                   Name
@@ -1021,7 +1021,7 @@ export function DatabaseConnectionPanel(props: {
                   />
                 </div>
               )}
-            </div>
+            </fieldset>
 
             {isEditMode && !editing.ready && editing.reason && !testFeedback && (
               <div

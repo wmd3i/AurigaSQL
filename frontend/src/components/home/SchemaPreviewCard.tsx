@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { ArrowRight, GitBranch, KeyRound, Link2, Loader2, Sparkles, Table2, Workflow } from "lucide-react";
 import { cn } from "../../lib/cn";
-import { parseSchemaGraph } from "../../lib/schemaGraph";
+import { parseSchemaGraph, primaryKeyColumns } from "../../lib/schemaGraph";
 
 const TRUNCATION_THRESHOLD = 3900;
 
@@ -121,69 +121,70 @@ export function SchemaPreviewCard(props: {
         graph && graph.tables.length > 0 ? (
           <div className="mt-3 space-y-3">
             <div className="grid gap-2.5 sm:grid-cols-2">
-              {graph.tables.slice(0, 6).map((table) => (
-                <div
-                  key={table.name}
-                  className="rounded-xl border border-line bg-card p-3 shadow-[0_2px_10px_rgba(0,0,0,0.03)]"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2 border-b border-line/70 pb-1.5">
-                    <span className="truncate font-mono text-[12px] font-semibold text-ink">{table.name}</span>
-                    <span className="shrink-0 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                      {table.columns.length} cols
-                    </span>
-                  </div>
-                  <ul className="space-y-1">
-                    {table.columns.slice(0, 6).map((col) => {
-                      const colKey = `${table.name}:${col.name}`;
-                      const isFk = declaredFkSet.has(colKey);
-                      const isInferredFk = !isFk && inferredFkSet.has(colKey);
-                      const isPk =
-                        Boolean(col.meta?.toUpperCase().includes("PRIMARY KEY")) ||
-                        table.constraints.some((c) => c.toUpperCase().includes("PRIMARY KEY") && c.includes(col.name));
-                      return (
-                        <li key={col.name} className="flex items-center justify-between gap-2 text-[11px]">
-                          <span className="flex min-w-0 items-center gap-1.5 font-mono text-ink">
-                            {isPk ? (
-                              <KeyRound className="h-3 w-3 shrink-0 text-accent" />
-                            ) : isFk || isInferredFk ? (
-                              <Link2 className="h-3 w-3 shrink-0 text-muted" />
-                            ) : (
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-faint/60" />
-                            )}
-                            <span className="truncate">{col.name}</span>
-                          </span>
-                          <span className="flex shrink-0 items-center gap-1">
-                            {isPk && (
-                              <span className="rounded bg-accent-soft px-1 py-px text-[9px] font-semibold text-accent">
-                                PK
-                              </span>
-                            )}
-                            {isFk && (
-                              <span className="rounded bg-hover px-1 py-px text-[9px] font-semibold text-muted">
-                                FK
-                              </span>
-                            )}
-                            {isInferredFk && (
-                              <span
-                                title="Inferred from *_id column name"
-                                className="rounded bg-hover px-1 py-px text-[9px] font-medium text-faint"
-                              >
-                                FK?
-                              </span>
-                            )}
-                            <span className="font-mono text-[10px] text-faint">{col.type}</span>
-                          </span>
+              {graph.tables.slice(0, 6).map((table) => {
+                const pkColumns = primaryKeyColumns(table);
+                return (
+                  <div
+                    key={table.name}
+                    className="rounded-xl border border-line bg-card p-3 shadow-[0_2px_10px_rgba(0,0,0,0.03)]"
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-line/70 pb-1.5">
+                      <span className="truncate font-mono text-[12px] font-semibold text-ink">{table.name}</span>
+                      <span className="shrink-0 rounded-full bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                        {table.columns.length} cols
+                      </span>
+                    </div>
+                    <ul className="space-y-1">
+                      {table.columns.slice(0, 6).map((col) => {
+                        const colKey = `${table.name}:${col.name}`;
+                        const isFk = declaredFkSet.has(colKey);
+                        const isInferredFk = !isFk && inferredFkSet.has(colKey);
+                        const isPk = pkColumns.has(col.name);
+                        return (
+                          <li key={col.name} className="flex items-center justify-between gap-2 text-[11px]">
+                            <span className="flex min-w-0 items-center gap-1.5 font-mono text-ink">
+                              {isPk ? (
+                                <KeyRound className="h-3 w-3 shrink-0 text-accent" />
+                              ) : isFk || isInferredFk ? (
+                                <Link2 className="h-3 w-3 shrink-0 text-muted" />
+                              ) : (
+                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-faint/60" />
+                              )}
+                              <span className="truncate">{col.name}</span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-1">
+                              {isPk && (
+                                <span className="rounded bg-accent-soft px-1 py-px text-[9px] font-semibold text-accent">
+                                  PK
+                                </span>
+                              )}
+                              {isFk && (
+                                <span className="rounded bg-hover px-1 py-px text-[9px] font-semibold text-muted">
+                                  FK
+                                </span>
+                              )}
+                              {isInferredFk && (
+                                <span
+                                  title="Inferred from *_id column name"
+                                  className="rounded bg-hover px-1 py-px text-[9px] font-medium text-faint"
+                                >
+                                  FK?
+                                </span>
+                              )}
+                              <span className="font-mono text-[10px] text-faint">{col.type}</span>
+                            </span>
+                          </li>
+                        );
+                      })}
+                      {table.columns.length > 6 && (
+                        <li className="pt-0.5 text-[10.5px] text-faint">
+                          +{table.columns.length - 6} more columns
                         </li>
-                      );
-                    })}
-                    {table.columns.length > 6 && (
-                      <li className="pt-0.5 text-[10.5px] text-faint">
-                        +{table.columns.length - 6} more columns
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              ))}
+                      )}
+                    </ul>
+                  </div>
+                );
+              })}
             </div>
             {graph.tables.length > 6 && (
               <p className="text-[11px] text-muted">Showing 6 of {graph.tables.length} tables.</p>

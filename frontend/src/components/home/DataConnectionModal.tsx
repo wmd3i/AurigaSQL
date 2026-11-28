@@ -106,6 +106,7 @@ export function DataConnectionModal(props: {
   async function handleToggleDemoGroup(group: DemoConnection) {
     setDemoBusyId(group.source_group);
     setError("");
+    let toggleError: string | null = null;
     try {
       if (group.connected) {
         await bff.disconnectDemoGroup(group.source_group);
@@ -113,11 +114,17 @@ export function DataConnectionModal(props: {
         await bff.connectDemoGroup(group.source_group);
       }
     } catch (err) {
-      setError(String(err));
-    } finally {
+      toggleError = String(err);
+    }
+    try {
+      // refreshAll() clears `error` first, so the toggle error is set after it.
       await refreshAll();
       await props.onChanged();
+    } catch (err) {
+      toggleError = toggleError ?? String(err);
+    } finally {
       setDemoBusyId(null);
+      if (toggleError) setError((current) => (current ? `${toggleError} · ${current}` : toggleError!));
     }
   }
 

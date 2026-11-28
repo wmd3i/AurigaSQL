@@ -593,7 +593,9 @@ export function CanvasSchemaPanel(props: {
   activeId: string | null;
   panelWidth?: number;
 }) {
-  const schemaLookupKey = props.source?.id ?? props.canvasDb;
+  // Restored conversations carry a synthesized id (e.g. "sqlite:credit") the backend doesn't know; look those up by name.
+  const schemaLookupKey =
+    props.source && props.source.source_type !== "restored" ? props.source.id : props.canvasDb;
   const displayDbName = props.source?.display_name ?? props.canvasDb;
   const displayEngine = props.source?.engine ?? inferDataEngine(displayDbName);
   const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });

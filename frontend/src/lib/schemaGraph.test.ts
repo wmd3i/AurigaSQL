@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSchemaGraph } from "./schemaGraph";
+import { parseSchemaGraph, primaryKeyColumns } from "./schemaGraph";
 
 describe("parseSchemaGraph", () => {
   it("parses PostgreSQL Table/Columns blocks and infers *_id relations", () => {
@@ -84,5 +84,43 @@ CREATE TABLE IF NOT EXISTS orders (
         toColumn: "id",
       },
     ]);
+  });
+
+  it("ignores -- and /* */ comments, including apostrophes inside them", () => {
+    const schema = [
+      "CREATE TABLE users (",
+      "  id INTEGER PRIMARY KEY, -- user's id",
+      "  name TEXT",
+      ");",
+      "CREATE TABLE products (",
+      "  id INTEGER, -- the id",
+      "  title TEXT, /* shown in the catalog, don't truncate */",
+      "  price REAL",
+      ");",
+    ].join("\n");
+
+    const graph = parseSchemaGraph(schema);
+    expect(graph?.tables.map((t) => t.name)).toEqual(["users", "products"]);
+    expect(graph?.tables[0].columns.map((c) => c.name)).toEqual(["id", "name"]);
+    expect(graph?.tables[1].columns.map((c) => c.name)).toEqual(["id", "title", "price"]);
+    expect(graph?.tables[1].constraints).toEqual([]);
+  });
+});
+
+describe("primaryKeyColumns", () => {
+  it("matches exact identifiers from PRIMARY KEY (...) instead of substrings", () => {
+    const graph = parseSchemaGraph(
+      [
+        "CREATE TABLE orders (",
+        "  id INTEGER,",
+        "  user_id INTEGER,",
+        '  "order_no" TEXT,',
+        '  CONSTRAINT pk_orders PRIMARY KEY (user_id, "order_no")',
+        ");",
+        "CREATE TABLE items (id INTEGER PRIMARY KEY, item_id INTEGER);",
+      ].join("\n"),
+    );
+    expect([...primaryKeyColumns(graph!.tables[0])].sort()).toEqual(["order_no", "user_id"]);
+    expect([...primaryKeyColumns(graph!.tables[1])]).toEqual(["id"]);
   });
 });

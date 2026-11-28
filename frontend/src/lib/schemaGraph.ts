@@ -64,6 +64,22 @@ function parseConstraintReference(line: string, tableName: string): SchemaRelati
   }));
 }
 
+/**
+ * If a SQL comment starts at `i` (outside quotes), return the index of its last character;
+ * otherwise return -1. Unterminated comments run to the end of the text.
+ */
+function sqlCommentEnd(text: string, i: number): number {
+  if (text[i] === "-" && text[i + 1] === "-") {
+    const nl = text.indexOf("\n", i + 2);
+    return nl === -1 ? text.length - 1 : nl;
+  }
+  if (text[i] === "/" && text[i + 1] === "*") {
+    const close = text.indexOf("*/", i + 2);
+    return close === -1 ? text.length - 1 : close + 1;
+  }
+  return -1;
+}
+
 function splitTopLevelCommas(text: string): string[] {
   const parts: string[] = [];
   let current = "";
@@ -79,6 +95,13 @@ function splitTopLevelCommas(text: string): string[] {
       } else if (ch === quote) {
         quote = null;
       }
+      continue;
+    }
+    const commentEnd = sqlCommentEnd(text, i);
+    if (commentEnd !== -1) {
+      // Drop comments so their text (e.g. an apostrophe) never leaks into a column entry.
+      current += " ";
+      i = commentEnd;
       continue;
     }
     if (ch === "'" || ch === '"' || ch === "`") {
@@ -219,6 +242,11 @@ function extractCreateTableStatements(sql: string): Array<{ tableName: string; b
         }
         continue;
       }
+      const commentEnd = sqlCommentEnd(sql, idx);
+      if (commentEnd !== -1) {
+        idx = commentEnd;
+        continue;
+      }
       if (ch === "'" || ch === '"' || ch === "`") {
         quote = ch;
         continue;
@@ -236,6 +264,23 @@ function extractCreateTableStatements(sql: string): Array<{ tableName: string; b
     }
   }
   return results;
+}
+
+/** Column names a table declares as its primary key, inline or via a table-level constraint. */
+export function primaryKeyColumns(table: SchemaTable): Set<string> {
+  const keys = new Set<string>();
+  table.columns.forEach((col) => {
+    if (col.meta && /\bPRIMARY\s+KEY\b/i.test(col.meta)) keys.add(col.name);
+  });
+  table.constraints.forEach((constraint) => {
+    const match = constraint.match(/\bPRIMARY\s+KEY\s*\(([^)]*)\)/i);
+    if (!match) return;
+    match[1].split(",").forEach((ident) => {
+      const name = unquoteIdent(ident.trim().split(/\s+/)[0] ?? "");
+      if (name) keys.add(name);
+    });
+  });
+  return keys;
 }
 
 export function parseSchemaGraph(result: string): SchemaGraph | null {
