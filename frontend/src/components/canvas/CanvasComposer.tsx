@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { ArrowUp, X } from "lucide-react";
 import { cn } from "../../lib/cn";
-import type { Conversation } from "../../state/types";
+import type { CanvasBranchSide, Conversation } from "../../state/types";
 
 export type BranchTarget = {
   parentThreadId: string;
   parentNodeId: string;
   label: string;
   mode?: "auto" | "manual";
-  branchKind?: "follow_up" | "fork";
+  side?: CanvasBranchSide;
+  anchorError?: boolean;
 };
 
 /** Docked at the bottom of the left rail — the canvas's action column. Plain

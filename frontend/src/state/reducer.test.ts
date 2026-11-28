@@ -314,7 +314,7 @@ describe("reducer", () => {
     });
     const branch = reducer(root, {
       type: "CONVERSATION_STARTED", id: "fork", database: "db2", databases: ["db2"], title: "fork", createdAt: 3,
-      mode: "workspace", canvasWorkId: "work", parentThreadId: "root", parentNodeId: "n0", canvasBranchKind: "fork",
+      mode: "workspace", canvasWorkId: "work", parentThreadId: "root", parentNodeId: "n0", canvasBranchSide: "right",
     });
     const chat = reducer(branch, { type: "OPEN_CONVERSATION", id: "fork", view: "result" });
     expect(chat).toMatchObject({ view: "result", activeId: "fork", currentCanvasWorkId: "work" });

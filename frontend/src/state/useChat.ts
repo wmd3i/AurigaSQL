@@ -2,7 +2,7 @@ import { useCallback, useRef, type Dispatch } from "react";
 import { bff } from "../api/bff";
 import type { EventStreamHandle } from "../api/eventStream";
 import { openTaskStream } from "../api/eventSocket";
-import { CHAT_START_NAVIGATION, type Action, type CanvasScope, type QueryMode } from "./types";
+import { CHAT_START_NAVIGATION, type Action, type CanvasBranchSide, type CanvasScope, type QueryMode } from "./types";
 import type { DataSource } from "../api/bff";
 import type { CanvasToneId } from "../lib/canvasTones";
 
@@ -10,7 +10,8 @@ type BranchFrom = {
   parentThreadId: string;
   parentNodeId: string;
   parentContext?: string;
-  branchKind?: "follow_up" | "fork";
+  side?: CanvasBranchSide;
+  anchorError?: boolean;
 };
 
 const SESSION_GONE_MESSAGE = "This session is no longer available. It may have been lost after a backend restart.";
@@ -162,7 +163,8 @@ export function useChat(dispatch: Dispatch<Action>) {
         canvasWorkId: options?.canvasWorkId ?? null,
         parentThreadId: branchFrom?.parentThreadId ?? null,
         parentNodeId: branchFrom?.parentNodeId ?? null,
-        canvasBranchKind: branchFrom?.branchKind,
+        canvasBranchSide: branchFrom?.side,
+        parentAnchorError: branchFrom?.anchorError,
         canvasTone: options?.canvasTone,
         canvasScope,
         preserveView: options?.preserveView,
@@ -187,7 +189,7 @@ export function useChat(dispatch: Dispatch<Action>) {
       database: string,
       databases: string[],
       query: string,
-      branchFrom: { parentThreadId: string; parentNodeId: string; branchKind?: "follow_up" | "fork" },
+      branchFrom: { parentThreadId: string; parentNodeId: string; side?: CanvasBranchSide; anchorError?: boolean },
       canvasScope?: CanvasScope,
       canvasTone?: CanvasToneId,
       canvasWorkId?: string | null,
@@ -207,7 +209,8 @@ export function useChat(dispatch: Dispatch<Action>) {
         canvasWorkId,
         parentThreadId: branchFrom.parentThreadId,
         parentNodeId: branchFrom.parentNodeId,
-        canvasBranchKind: branchFrom.branchKind,
+        canvasBranchSide: branchFrom.side,
+        parentAnchorError: branchFrom.anchorError,
         canvasTone,
         canvasScope,
       });

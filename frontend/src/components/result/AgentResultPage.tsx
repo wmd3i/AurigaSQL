@@ -595,7 +595,7 @@ export function AgentResultPage(props: {
                 >
                   {workThreads.map((thread) => (
                     <option key={thread.id} value={thread.id}>
-                      {thread.parentThreadId ? (thread.canvasBranchKind === "fork" ? "Fork: " : "Follow up: ") : "Thread: "}
+                      {thread.parentThreadId ? "Follow up: " : "Thread: "}
                       {thread.summary || thread.title}
                     </option>
                   ))}

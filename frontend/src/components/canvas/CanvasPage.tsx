@@ -28,20 +28,29 @@ import type { ThreadNode } from "../../lib/buildNodes";
 import { cardLabel } from "./cardKind";
 import { cn } from "../../lib/cn";
 import type { DataSource } from "../../api/bff";
-import type { Conversation } from "../../state/types";
+import type { CanvasBranchSide, Conversation } from "../../state/types";
 import { ThreadNodeCard, type CardContent, type CardData, type CardNode } from "./ThreadNodeCard";
 import { FloatingDraftNode, type FloatingDraftNodeT } from "./FloatingDraftNode";
 import type { BranchTarget } from "./CanvasComposer";
 import type { CanvasToneId } from "../../lib/canvasTones";
 import { conversationWorkId } from "../../lib/conversationHistory";
 import { resolveCanvasRowY } from "../../lib/canvasLayout";
+import {
+  BRANCH_GAP_Y,
+  DRAFT_BELOW_GAP_Y,
+  branchHandles,
+  branchPosition,
+  resolveAnchorCanvasId,
+  collapsedThreadIds,
+  sideSiblingIndex,
+  toolBranchTotal,
+  upsertBranchDraft,
+} from "../../lib/branchPlacement";
+import { followUpSides as sidesForFollowUp, type FollowUpCard } from "../../lib/followUp";
+import { branchContextCards } from "../../lib/branchContext";
 
 const COLUMN_W = 384;
 const GAP_Y = 50;
-const BRANCH_MIN_X_OFFSET = 500;
-const BRANCH_X_PADDING = 180;
-const BRANCH_GAP_Y = 36;
-const BRANCH_SIBLING_Y = 132;
 const MINI_RAIL_W = 56;
 const LEFT_PANEL_BASE_X = 96;
 const DEFAULT_LEFT_PANEL_W = 520;
@@ -53,6 +62,8 @@ const MAX_LEFT_PANEL_H = 980;
 const CARD_W = 320;
 const FLOATING_DRAFT_W = 360;
 const FLOATING_DRAFT_H = 178;
+/** A follow-up draft is taller than a plain one: it adds the "From … · includes N earlier cards" line (measured ~287px). */
+const BRANCH_DRAFT_H = 290;
 const ANSWER_CARD_W = 560;
 const TOOL_GROUP_BUTTON_W = 320;
 const TOOL_GROUP_CARD_W = 704;
@@ -65,14 +76,16 @@ const DEFAULT_FIT_VIEW = { padding: DEFAULT_THREAD_FOCUS.padding, maxZoom: DEFAU
 
 type CanvasNode = CardNode | FloatingDraftNodeT;
 type LeftPanel = "threads" | "schema" | "data" | null;
-type BranchDraftKind = "follow_up" | "fork";
 type BranchDraft = {
   id: string;
   x: number;
   y: number;
   parentCanvasNodeId: string;
+  parentNodeId: string;
   target: BranchTarget;
-  kind: BranchDraftKind;
+  side: CanvasBranchSide;
+  /** Started from a sub-tool inside an expanded tool group. */
+  subToolId?: string;
 };
 type ResizeEdge =
   | "right"
@@ -187,6 +200,31 @@ function buildThreadGroups(nodes: CardContent[]): ThreadGroup[] {
 
 function isCardNode(node: CanvasNode): node is CardNode {
   return node.type === "card";
+}
+
+/** Canvas id of the card a branch thread hangs from (Error card while it exists, see resolveAnchorCanvasId). */
+function branchAnchorCanvasId(
+  conv: Conversation,
+  parent: Conversation | undefined,
+  threadNodes: (conv: Conversation) => CardContent[],
+): string | null {
+  if (!conv.parentThreadId || !conv.parentNodeId) return null;
+  if (!parent) return `${conv.parentThreadId}:${conv.parentNodeId}`;
+  const groups = buildThreadGroups(threadNodes(parent));
+  const cardIds = groups.map((group) => `${parent.id}:${groupCardContent(group.nodes).id}`);
+  return resolveAnchorCanvasId(
+    parent.id,
+    cardIds,
+    { parentNodeId: conv.parentNodeId, parentAnchorError: conv.parentAnchorError },
+    (nodeId) => canvasNodeIdForThreadNode(parent.id, groups, nodeId),
+  );
+}
+
+/** The sub-tool a branch hangs from when it was started inside a tool group. */
+function branchSubToolId(conv: Conversation, parent: Conversation | undefined, threadNodes: (conv: Conversation) => CardContent[]): string | undefined {
+  if (!parent || !conv.parentNodeId || conv.parentAnchorError) return undefined;
+  const group = buildThreadGroups(threadNodes(parent)).find((item) => item.nodes.some((node) => node.id === conv.parentNodeId));
+  return group && groupCardContent(group.nodes).kind === "tool_group" ? conv.parentNodeId : undefined;
 }
 
 function opensInspector(tn: CardContent) {
@@ -486,21 +524,6 @@ function CanvasInner(props: {
         : selectedNode.data.tn
       : null;
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented) return;
-      if (event.key.toLowerCase() !== "f") return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
-      const createDraft = selectedNode?.data.onCreateBranchDraft;
-      if (!createDraft) return;
-      event.preventDefault();
-      createDraft("follow_up");
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedNode]);
 
   const zoomPercent = Math.round(zoom * 100);
 
@@ -678,31 +701,6 @@ function CanvasInner(props: {
     }, 0);
   }, [props.prefillDraft?.token, setNodes]);
 
-  const addBranchDraft = useCallback(
-    (parentCanvasNodeId: string, target: BranchTarget, kind: BranchDraftKind) => {
-      const parentNode = nodesRef.current.find((node) => node.id === parentCanvasNodeId && node.type === "card") as CardNode | undefined;
-      if (!parentNode) return;
-      const parentWidth = cardWidth(parentNode.data.tn);
-      const parentHeight = nodeHeights[parentCanvasNodeId] ?? estimateHeight(parentNode.data.tn);
-      const draftId = `branch-draft:${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-      const x =
-        kind === "fork"
-          ? parentNode.position.x + Math.max(BRANCH_MIN_X_OFFSET, parentWidth + BRANCH_X_PADDING)
-          : parentNode.position.x + parentWidth / 2 - FLOATING_DRAFT_W / 2;
-      const y =
-        kind === "fork"
-          ? parentNode.position.y
-          : parentNode.position.y + parentHeight + 94;
-
-      setBranchDrafts((current) => [
-        ...current.filter((draft) => !(draft.parentCanvasNodeId === parentCanvasNodeId && draft.kind === kind)),
-        { id: draftId, x, y, parentCanvasNodeId, target, kind },
-      ]);
-      setSelectedBranchDraftId(draftId);
-      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === draftId })));
-    },
-    [nodeHeights, setNodes],
-  );
 
   const emptyWorkspace = visibleConversations.length === 0;
 
@@ -726,15 +724,14 @@ function CanvasInner(props: {
     setExpandAllToken((current) => current + 1);
   }
 
-  const branchCounts = useMemo(() => {
-    const out = new Map<string, number>();
-    visibleConversations.forEach((conv) => {
-      if (!conv.parentThreadId || !conv.parentNodeId) return;
-      const parent = allConversationById.get(conv.parentThreadId);
-      const key = parent
-        ? canvasNodeIdForThreadNode(conv.parentThreadId, buildThreadGroups(threadNodes(parent)), conv.parentNodeId)
-        : `${conv.parentThreadId}:${conv.parentNodeId}`;
-      out.set(key, (out.get(key) ?? 0) + 1);
+  /** Anchor canvas id → committed branches, oldest first, so a new branch never moves the ones above it. */
+  const branchesByAnchor = useMemo(() => {
+    const out = new Map<string, Array<{ id: string; side: CanvasBranchSide; parentNodeId: string }>>();
+    // visibleConversations is newest-first (the reducer prepends); sibling slots must be oldest-first.
+    [...visibleConversations].sort((a, b) => a.createdAt - b.createdAt).forEach((conv) => {
+      const key = branchAnchorCanvasId(conv, conv.parentThreadId ? allConversationById.get(conv.parentThreadId) : undefined, threadNodes);
+      if (!key || !conv.parentNodeId) return;
+      out.set(key, [...(out.get(key) ?? []), { id: conv.id, side: conv.canvasBranchSide ?? "right", parentNodeId: conv.parentNodeId }]);
     });
     return out;
   }, [allConversationById, threadNodes, visibleConversations]);
@@ -746,16 +743,72 @@ function CanvasInner(props: {
 
   const childThreadsByAnchor = useMemo(() => {
     const out = new Map<string, string[]>();
-    visibleConversations.forEach((conv) => {
-      if (!conv.parentThreadId || !conv.parentNodeId) return;
-      const parent = allConversationById.get(conv.parentThreadId);
-      const key = parent
-        ? canvasNodeIdForThreadNode(conv.parentThreadId, buildThreadGroups(threadNodes(parent)), conv.parentNodeId)
-        : `${conv.parentThreadId}:${conv.parentNodeId}`;
-      out.set(key, [...(out.get(key) ?? []), conv.id]);
-    });
+    branchesByAnchor.forEach((branches, key) => out.set(key, branches.map((branch) => branch.id)));
     return out;
-  }, [allConversationById, threadNodes, visibleConversations]);
+  }, [branchesByAnchor]);
+
+  /** Collapsed follow-up groups, `<anchor canvas id>|<side>` or `<anchor canvas id>|tool:<tool id>` (session only). */
+  const [collapsedBranchKeys, setCollapsedBranchKeys] = useState<Set<string>>(() => new Set());
+  const hiddenThreadIds = useMemo(
+    () => collapsedThreadIds(branchesByAnchor, collapsedBranchKeys),
+    [branchesByAnchor, collapsedBranchKeys],
+  );
+  const setBranchGroupCollapsed = useCallback((key: string, collapsed: boolean) => {
+    setCollapsedBranchKeys((current) => {
+      if (current.has(key) === collapsed) return current;
+      const next = new Set(current);
+      if (collapsed) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+
+  /** Open (or re-select) the follow-up draft for one side of a card. */
+  const addBranchDraft = useCallback(
+    (parentCanvasNodeId: string, target: BranchTarget, side: CanvasBranchSide, subToolId?: string) => {
+      const parentNode = nodesRef.current.find((node) => node.id === parentCanvasNodeId && node.type === "card") as CardNode | undefined;
+      if (!parentNode) return;
+      const parentRect = {
+        x: parentNode.position.x,
+        y: parentNode.position.y,
+        width: parentNode.measured?.width ?? cardWidth(parentNode.data.tn),
+        height: nodeHeights[parentCanvasNodeId] ?? estimateHeight(parentNode.data.tn),
+      };
+      const sameSide =
+        (branchesByAnchor.get(parentCanvasNodeId) ?? []).filter((branch) => branch.side === side).length +
+        branchDrafts.filter((draft) => draft.parentCanvasNodeId === parentCanvasNodeId && draft.side === side).length;
+      const slot = branchPosition(side, parentRect, FLOATING_DRAFT_W, sameSide, DRAFT_BELOW_GAP_Y);
+      // Like committed threads, a draft moves down past cards already in its column (e.g. an earlier follow-up's cards).
+      const blockers = nodesRef.current.flatMap((node) => {
+        if (node.type !== "card") return [];
+        const card = node as CardNode;
+        return [{
+          top: card.position.y,
+          bottom: card.position.y + (nodeHeights[card.id] ?? estimateHeight(card.data.tn)),
+          left: card.position.x,
+          right: card.position.x + cardWidth(card.data.tn),
+        }];
+      });
+      const position = {
+        x: slot.x,
+        y: resolveCanvasRowY(slot.y, BRANCH_DRAFT_H, BRANCH_GAP_Y, slot.x, slot.x + FLOATING_DRAFT_W, blockers),
+      };
+      const draft: BranchDraft = {
+        id: `branch-draft:${side}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+        ...position,
+        parentCanvasNodeId,
+        parentNodeId: target.parentNodeId,
+        target: { ...target, side },
+        side,
+        subToolId,
+      };
+      const next = upsertBranchDraft(branchDrafts, draft);
+      setBranchDrafts(next.drafts);
+      setSelectedBranchDraftId(next.selectedId);
+      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === next.selectedId })));
+    },
+    [branchDrafts, branchesByAnchor, nodeHeights, setNodes],
+  );
 
   const collectFollowerCardIds = useCallback(
     (canvasNodeId: string) => {
@@ -981,11 +1034,15 @@ function CanvasInner(props: {
           type: "floatingDraft",
           position: { x: draft.x, y: draft.y },
           data: {
-            title: draft.kind === "fork" ? "Fork question" : "Follow-up question",
-            placeholder: draft.kind === "fork" ? "Explore a parallel direction..." : "Ask a follow-up from this card...",
+            title: "Follow-up",
+            placeholder: draft.subToolId ? "Ask a follow-up from this tool..." : "Ask a follow-up from this card...",
+            context: {
+              anchorLabel: draft.target.label,
+              count: branchContextCards(props.conversations, draft.target).length,
+            },
             onOpenLlmConfig: props.onOpenLlmConfig,
             onSubmit: async (text: string, toneId: CanvasToneId) => {
-              const started = await startCanvasQuestion(text, { ...draft.target, branchKind: draft.kind }, toneId);
+              const started = await startCanvasQuestion(text, { ...draft.target, side: draft.side }, toneId);
               if (!started) return false;
               setBranchDrafts((currentDrafts) => currentDrafts.filter((item) => item.id !== draft.id));
               setSelectedBranchDraftId((current) => (current === draft.id ? null : current));
@@ -996,61 +1053,45 @@ function CanvasInner(props: {
       });
 
       ordered.forEach((conv, ci) => {
+        if (hiddenThreadIds.has(conv.id)) return;
         const groups = buildThreadGroups(threadNodes(conv));
         if (groups.length === 0) return;
 
-        const parentForCanvasNode = conv.parentThreadId ? allConversationById.get(conv.parentThreadId) : null;
-        const parentCanvasNodeId =
-          conv.parentThreadId && conv.parentNodeId && parentForCanvasNode
-            ? canvasNodeIdForThreadNode(conv.parentThreadId, buildThreadGroups(threadNodes(parentForCanvasNode)), conv.parentNodeId)
-            : conv.parentThreadId && conv.parentNodeId
-              ? `${conv.parentThreadId}:${conv.parentNodeId}`
-              : null;
+        const parentForCanvasNode = conv.parentThreadId ? allConversationById.get(conv.parentThreadId) ?? null : null;
+        const parentCanvasNodeId = branchAnchorCanvasId(conv, parentForCanvasNode ?? undefined, threadNodes);
         const parentCandidate = parentCanvasNodeId ? byId.get(parentCanvasNodeId) : null;
         const parentNode = parentCandidate?.type === "card" ? parentCandidate as CardNode : null;
         const parentAnchorNode =
           parentForCanvasNode && conv.parentNodeId
             ? threadNodes(parentForCanvasNode).find((node) => node.id === conv.parentNodeId) ?? null
             : null;
-        const branchOrigin = parentAnchorNode ? { label: cardLabel(parentAnchorNode), kind: conv.canvasBranchKind } : null;
-        const siblingCount = parentCanvasNodeId ? branchCounts.get(parentCanvasNodeId) ?? 1 : 0;
-        const branchIndex =
-          parentCanvasNodeId && siblingCount > 0
-            ? ordered
-                .filter((c) => {
-                  if (!c.parentThreadId || !c.parentNodeId || c.parentThreadId !== conv.parentThreadId) return false;
-                  const parent = allConversationById.get(c.parentThreadId);
-                  if (!parent) return false;
-                  return canvasNodeIdForThreadNode(c.parentThreadId, buildThreadGroups(threadNodes(parent)), c.parentNodeId) === parentCanvasNodeId;
-                })
-                .findIndex((c) => c.id === conv.id)
-            : -1;
+        const branchOrigin =
+          parentAnchorNode && parentCanvasNodeId
+            ? {
+                label: conv.parentAnchorError && parentCanvasNodeId.endsWith(":error") ? "Error" : cardLabel(parentAnchorNode),
+                onJump: () => focusNode(parentCanvasNodeId),
+              }
+            : null;
+        const side: CanvasBranchSide = conv.canvasBranchSide ?? "right";
+        const siblingIndex = parentCanvasNodeId
+          ? Math.max(0, sideSiblingIndex(branchesByAnchor.get(parentCanvasNodeId) ?? [], conv.id))
+          : 0;
         const floatingPosition =
           !parentCanvasNodeId ? floatingThreadPositions[conv.id] : undefined;
-        const isFollowUpBranch = conv.canvasBranchKind === "follow_up";
-        const parentWidth = parentNode ? cardWidth(parentNode.data.tn) : CARD_W;
-        const parentHeight = parentNode
-          ? nodeHeights[parentNode.id] ?? estimateHeight(parentNode.data.tn)
-          : 0;
-        const branchOffsetX = parentNode
-          ? Math.max(BRANCH_MIN_X_OFFSET, cardWidth(parentNode.data.tn) + BRANCH_X_PADDING)
-          : COLUMN_W;
-        const baseY = parentNode
-          ? isFollowUpBranch
-            ? parentNode.position.y + parentHeight + BRANCH_GAP_Y
-            : parentNode.position.y + Math.max(0, branchIndex) * BRANCH_SIBLING_Y
-          : floatingPosition?.y ?? 40;
-        const baseX = parentNode
-          ? isFollowUpBranch
-            ? parentNode.position.x + parentWidth / 2 - CARD_W / 2
-            : parentNode.position.x + branchOffsetX
-          : floatingPosition?.x ?? columnIndex(conv, ci) * COLUMN_W + 40;
+        const parentRect = parentNode
+          ? {
+              x: parentNode.position.x,
+              y: parentNode.position.y,
+              width: cardWidth(parentNode.data.tn),
+              height: nodeHeights[parentNode.id] ?? estimateHeight(parentNode.data.tn),
+            }
+          : null;
+        const branchBase = parentRect ? branchPosition(side, parentRect, CARD_W, siblingIndex) : null;
+        const baseY = branchBase ? branchBase.y : floatingPosition?.y ?? 40;
+        const baseX = branchBase ? branchBase.x : floatingPosition?.x ?? columnIndex(conv, ci) * COLUMN_W + 40;
         const rowGapY = parentNode ? BRANCH_GAP_Y : GAP_Y;
-        let threadCenterX = parentNode
-          ? isFollowUpBranch
-            ? parentNode.position.x + parentWidth / 2
-            : baseX + CARD_W / 2
-          : baseX + CARD_W / 2;
+        let threadCenterX =
+          parentRect && side === "below" ? parentRect.x + parentRect.width / 2 : baseX + CARD_W / 2;
 
         let cursorY = baseY;
         groups.forEach((group, gi) => {
@@ -1066,6 +1107,15 @@ function CanvasInner(props: {
             rowX,
             rowX + cardWidth(tn),
             out.flatMap((node) => {
+              // Follow-up drafts block too, so a thread that re-lays out never lands on a draft being written.
+              if (node.type === "floatingDraft" && node.id.startsWith("branch-draft:")) {
+                return [{
+                  top: node.position.y,
+                  bottom: node.position.y + BRANCH_DRAFT_H,
+                  left: node.position.x,
+                  right: node.position.x + FLOATING_DRAFT_W,
+                }];
+              }
               if (node.type !== "card") return [];
               const blockerTop = node.position.y;
               return [{
@@ -1086,6 +1136,75 @@ function CanvasInner(props: {
           autoCardPositions.set(id, computedPosition);
           const manuallyPositioned = manualCardPositionIdsRef.current.has(id);
           const position = manuallyPositioned && existing ? existing.position : computedPosition;
+          const anchorBranches = branchesByAnchor.get(id) ?? [];
+          const isErrorCard = tn.kind === "error";
+          const previousGroup = gi > 0 ? groups[gi - 1].nodes : [];
+          // An Error card is not in the transcript, so a follow-up from it hangs off the last real card.
+          const anchorNodeId = isErrorCard ? previousGroup[previousGroup.length - 1]?.id : tn.id;
+          const followUp = (() => {
+            if (tn.kind === "tool_group") {
+              const counts: Record<string, number> = {};
+              anchorBranches.forEach((branch) => {
+                counts[branch.parentNodeId] = (counts[branch.parentNodeId] ?? 0) + 1;
+              });
+              return {
+                sides: undefined,
+                counts: undefined,
+                onFollowUp: undefined,
+                collapsedSides: undefined,
+                onToggleBranches: undefined,
+                tool: {
+                  counts,
+                  total: toolBranchTotal(counts),
+                  collapsed: Object.fromEntries(
+                    Object.keys(counts).map((toolId) => [toolId, collapsedBranchKeys.has(`${id}|tool:${toolId}`)]),
+                  ),
+                  onFollowUp: (tool: ThreadNode) => {
+                    setBranchGroupCollapsed(`${id}|tool:${tool.id}`, false);
+                    addBranchDraft(id, { parentThreadId: conv.id, parentNodeId: tool.id, label: cardLabel(tool), mode: "manual" }, "right", tool.id);
+                  },
+                  onToggle: (tool: ThreadNode) => {
+                    const key = `${id}|tool:${tool.id}`;
+                    setBranchGroupCollapsed(key, !collapsedBranchKeys.has(key));
+                  },
+                },
+              };
+            }
+            if (!anchorNodeId) return { sides: undefined, counts: undefined, onFollowUp: undefined, collapsedSides: undefined, onToggleBranches: undefined, tool: undefined };
+            return {
+              sides: sidesForFollowUp({
+                card: tn as FollowUpCard,
+                status: conv.status,
+                isLastCard: lastGroup,
+                hasBelowBranch: anchorBranches.some((branch) => branch.side === "below"),
+                hasBelowDraft: branchDrafts.some((draft) => draft.parentCanvasNodeId === id && draft.side === "below"),
+              }),
+              counts: {
+                left: anchorBranches.filter((branch) => branch.side === "left").length,
+                right: anchorBranches.filter((branch) => branch.side === "right").length,
+              },
+              collapsedSides: {
+                left: collapsedBranchKeys.has(`${id}|left`),
+                right: collapsedBranchKeys.has(`${id}|right`),
+              },
+              onToggleBranches: (side: "left" | "right") => {
+                const key = `${id}|${side}`;
+                setBranchGroupCollapsed(key, !collapsedBranchKeys.has(key));
+              },
+              onFollowUp: (side: CanvasBranchSide) => {
+                // Adding to a collapsed side expands it, or the new thread would appear hidden.
+                if (side !== "below") setBranchGroupCollapsed(`${id}|${side}`, false);
+                addBranchDraft(id, {
+                  parentThreadId: conv.id,
+                  parentNodeId: anchorNodeId,
+                  label: isErrorCard ? "Error" : cardLabel(tn),
+                  mode: tn.kind === "question" || (tn.kind === "answer" && conv.parentThreadId === null) ? "auto" : "manual",
+                  anchorError: isErrorCard || undefined,
+                }, side);
+              },
+              tool: undefined,
+            };
+          })();
           const node: CardNode = {
             id,
             type: "card",
@@ -1099,35 +1218,16 @@ function CanvasInner(props: {
               canvasTone: gi === 0 && tn.kind === "question" ? conv.canvasTone : undefined,
               onHeightChange: (height) => onCardHeightChange(id, height),
               compact: props.embedded,
-              onCreateBranchDraft:
-                tn.kind === "tool" || tn.kind === "answer" || tn.kind === "agent_question" || tn.kind === "question"
-                  ? (kind) =>
-                      addBranchDraft(id, {
-                        parentThreadId: conv.id,
-                        parentNodeId: tn.id,
-                        label: cardLabel(tn),
-                        mode:
-                          tn.kind === "question" || (tn.kind === "answer" && conv.parentThreadId === null)
-                            ? "auto"
-                            : "manual",
-                        branchKind: kind,
-                      }, kind)
-                  : undefined,
+              followUpSides: followUp.sides,
+              branchCounts: followUp.counts,
+              onFollowUp: followUp.onFollowUp,
+              collapsedSides: followUp.collapsedSides,
+              onToggleBranches: followUp.onToggleBranches,
               onRevert:
                 !props.onRevertConversation || (gi === 0 && tn.kind === "question" && !branchOrigin)
                   ? undefined
                   : () => props.onRevertConversation?.(conv.id, tn.id),
-              onBranchTool:
-                tn.kind === "tool_group"
-                  ? async (tool, prompt) => {
-                      await startCanvasQuestion(prompt, {
-                        parentThreadId: conv.id,
-                        parentNodeId: tool.id,
-                        label: cardLabel(tool),
-                        mode: "manual",
-                      });
-                    }
-                  : undefined,
+              toolFollowUp: followUp.tool,
               onAnswer:
                 tn.kind === "agent_question" && tn.body === conv.pendingQuestion && tn.answer === undefined
                   ? (text) => props.onAnswer(conv.id, text)
@@ -1159,8 +1259,12 @@ function CanvasInner(props: {
       return out;
     });
   }, [
-    branchCounts,
+    branchesByAnchor,
     branchDrafts,
+    hiddenThreadIds,
+    collapsedBranchKeys,
+    setBranchGroupCollapsed,
+    props.conversations,
     addBranchDraft,
     columnIndex,
     floatingDrafts,
@@ -1184,23 +1288,27 @@ function CanvasInner(props: {
     const es: Edge[] = [];
     const solid = { stroke: "var(--accent)", strokeWidth: 1.5, opacity: 0.55 };
     const dashed = { strokeDasharray: "6 6", stroke: "var(--line)", strokeWidth: 1.5 };
+    const draftEdge = { strokeDasharray: "6 6", stroke: "var(--accent)", strokeWidth: 1.5, opacity: 0.55 };
 
     ordered.forEach((conv) => {
+      if (hiddenThreadIds.has(conv.id)) return;
       const groups = buildThreadGroups(threadNodes(conv));
       if (groups.length === 0) return;
 
       if (conv.parentThreadId && conv.parentNodeId) {
         const parent = allConversationById.get(conv.parentThreadId);
-        const sourceId = parent
-          ? canvasNodeIdForThreadNode(conv.parentThreadId, buildThreadGroups(threadNodes(parent)), conv.parentNodeId)
-          : `${conv.parentThreadId}:${conv.parentNodeId}`;
+        const sourceId = branchAnchorCanvasId(conv, parent, threadNodes);
+        const subToolId = branchSubToolId(conv, parent, threadNodes);
         const targetNode = groupCardContent(groups[0].nodes);
-        es.push({
-          id: `e:branch:${conv.parentThreadId}:${conv.parentNodeId}:${conv.id}:${targetNode.id}`,
-          source: sourceId,
-          target: `${conv.id}:${targetNode.id}`,
-          style: solid,
-        });
+        if (sourceId) {
+          es.push({
+            id: `e:branch:${conv.parentThreadId}:${conv.parentNodeId}:${conv.id}:${targetNode.id}`,
+            source: sourceId,
+            target: `${conv.id}:${targetNode.id}`,
+            ...branchHandles(conv.canvasBranchSide ?? "right", subToolId ? { toolId: subToolId, groupOpen: true } : undefined),
+            style: solid,
+          });
+        }
       }
 
       for (let i = 0; i < groups.length - 1; i++) {
@@ -1210,6 +1318,8 @@ function CanvasInner(props: {
           id: `${conv.id}:e:${sourceNode.id}:${targetNode.id}`,
           source: `${conv.id}:${sourceNode.id}`,
           target: `${conv.id}:${targetNode.id}`,
+          sourceHandle: "bottom",
+          targetHandle: "top",
           style: dashed,
         });
       }
@@ -1220,12 +1330,13 @@ function CanvasInner(props: {
         id: `e:draft:${draft.parentCanvasNodeId}:${draft.id}`,
         source: draft.parentCanvasNodeId,
         target: draft.id,
-        style: draft.kind === "fork" ? solid : dashed,
+        ...branchHandles(draft.side, draft.subToolId ? { toolId: draft.subToolId, groupOpen: true } : undefined),
+        style: draftEdge,
       });
     });
 
     return es;
-  }, [allConversationById, branchDrafts, ordered, threadNodes]);
+  }, [allConversationById, branchDrafts, hiddenThreadIds, ordered, threadNodes]);
 
   useEffect(() => {
     if (!focusedCanvasThreadId || !nodesInitialized || focusedThreadNodeIds.length === 0) return;
