@@ -10,6 +10,7 @@ import {
   useNodesInitialized,
   useNodesState,
   useReactFlow,
+  useUpdateNodeInternals,
   useViewport,
   type Edge,
   type NodeChange,
@@ -35,6 +36,7 @@ import type { BranchTarget } from "./CanvasComposer";
 import type { CanvasToneId } from "../../lib/canvasTones";
 import { conversationWorkId } from "../../lib/conversationHistory";
 import { resolveCanvasRowY } from "../../lib/canvasLayout";
+import { nodesMissingHandles } from "../../lib/nodesMissingHandles";
 
 const COLUMN_W = 384;
 const GAP_Y = 50;
@@ -393,6 +395,7 @@ function CanvasInner(props: {
   const baseCardPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const manualCardPositionIdsRef = useRef<Set<string>>(new Set());
   const rf = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
   const nodesInitialized = useNodesInitialized();
   const { zoom } = useViewport();
   const [leftPanel, setLeftPanel] = useState<LeftPanel>(null);
@@ -431,6 +434,14 @@ function CanvasInner(props: {
   useEffect(() => {
     nodesRef.current = nodes;
   }, [nodes]);
+
+  // A rebuild can drop a node's handle bounds right after its first measurement;
+  // React Flow then draws no edges to it until it resizes, so re-measure it.
+  // Child effects run first, so the React Flow store already holds these nodes.
+  useEffect(() => {
+    const stale = nodesMissingHandles(nodes.map((node) => node.id), rf.getInternalNode);
+    if (stale.length > 0) updateNodeInternals(stale);
+  }, [nodes, rf, updateNodeInternals]);
 
   useEffect(() => {
     setFocusThreadId(props.activeId);
@@ -971,6 +982,7 @@ function CanvasInner(props: {
               setFloatingDrafts((currentDrafts) => currentDrafts.filter((item) => item.id !== draft.id));
             },
           },
+          measured: byId.get(draft.id)?.measured,
           selected: byId.get(draft.id)?.selected,
         });
       });
@@ -991,6 +1003,7 @@ function CanvasInner(props: {
               setSelectedBranchDraftId((current) => (current === draft.id ? null : current));
             },
           },
+          measured: byId.get(draft.id)?.measured,
           selected: byId.get(draft.id)?.selected ?? selectedBranchDraftId === draft.id,
         });
       });
@@ -1090,6 +1103,7 @@ function CanvasInner(props: {
             id,
             type: "card",
             position,
+            measured: existing?.measured,
             selected: existing?.selected,
             data: {
               tn,
