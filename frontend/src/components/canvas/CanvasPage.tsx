@@ -964,6 +964,7 @@ function CanvasInner(props: {
               setFloatingDrafts((currentDrafts) => currentDrafts.filter((item) => item.id !== draft.id));
             },
           },
+          measured: byId.get(draft.id)?.measured,
           selected: byId.get(draft.id)?.selected,
         });
       });
@@ -984,6 +985,7 @@ function CanvasInner(props: {
               setSelectedBranchDraftId((current) => (current === draft.id ? null : current));
             },
           },
+          measured: byId.get(draft.id)?.measured,
           selected: byId.get(draft.id)?.selected ?? selectedBranchDraftId === draft.id,
         });
       });
@@ -1083,6 +1085,7 @@ function CanvasInner(props: {
             id,
             type: "card",
             position,
+            measured: existing?.measured,
             selected: existing?.selected,
             data: {
               tn,
