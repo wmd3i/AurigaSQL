@@ -78,3 +78,32 @@ export function upsertBranchDraft<T extends BranchDraftKey & { id: string }>(
   if (existing) return { drafts, selectedId: existing.id };
   return { drafts: [...drafts, next], selectedId: next.id };
 }
+
+/**
+ * Threads hidden by collapsed follow-up groups. A key is `<anchor canvas id>|<side>`
+ * for a card side, or `<anchor canvas id>|tool:<tool node id>` for a sub-tool.
+ * A hidden thread's own follow-ups are hidden with it.
+ */
+export function collapsedThreadIds(
+  branchesByAnchor: Map<string, Array<{ id: string; side: CanvasBranchSide; parentNodeId: string }>>,
+  collapsedKeys: Set<string>,
+): Set<string> {
+  const hidden = new Set<string>();
+  const queue: string[] = [];
+  branchesByAnchor.forEach((branches, anchor) => {
+    branches.forEach((branch) => {
+      if (collapsedKeys.has(`${anchor}|${branch.side}`) || collapsedKeys.has(`${anchor}|tool:${branch.parentNodeId}`)) {
+        queue.push(branch.id);
+      }
+    });
+  });
+  while (queue.length > 0) {
+    const id = queue.pop()!;
+    if (hidden.has(id)) continue;
+    hidden.add(id);
+    branchesByAnchor.forEach((branches, anchor) => {
+      if (anchor.startsWith(`${id}:`)) branches.forEach((branch) => queue.push(branch.id));
+    });
+  }
+  return hidden;
+}

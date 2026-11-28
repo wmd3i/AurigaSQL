@@ -54,8 +54,17 @@ export type CardData = {
   /** Committed follow-ups per side, shown as a count on that edge. */
   branchCounts?: { left: number; right: number };
   onFollowUp?: (side: CanvasBranchSide) => void;
-  /** Tool groups: per sub-tool follow-up counts and the right-edge plus handler. */
-  toolFollowUp?: { counts: Record<string, number>; total: number; onFollowUp: (tool: ThreadNode) => void };
+  /** Sides whose follow-ups are collapsed (hidden); the count toggles them. */
+  collapsedSides?: { left: boolean; right: boolean };
+  onToggleBranches?: (side: "left" | "right") => void;
+  /** Tool groups: per sub-tool follow-up counts, collapse state and handlers. */
+  toolFollowUp?: {
+    counts: Record<string, number>;
+    total: number;
+    collapsed: Record<string, boolean>;
+    onFollowUp: (tool: ThreadNode) => void;
+    onToggle: (tool: ThreadNode) => void;
+  };
   onRevert?: () => void;
   onAnswer?: (text: string) => void | Promise<void>;
   onInspectTool?: (tool: ThreadNode, openDetail?: boolean) => void;
@@ -93,8 +102,24 @@ function CardFollowUpPluses({ data, selected }: { data: CardData; selected: bool
   if (!sides || !onFollowUp) return null;
   return (
     <>
-      <FollowUpPlus side="left" available={sides.left} selected={selected} count={data.branchCounts?.left} onClick={() => onFollowUp("left")} />
-      <FollowUpPlus side="right" available={sides.right} selected={selected} count={data.branchCounts?.right} onClick={() => onFollowUp("right")} />
+      <FollowUpPlus
+        side="left"
+        available={sides.left}
+        selected={selected}
+        count={data.branchCounts?.left}
+        collapsed={data.collapsedSides?.left}
+        onClick={() => onFollowUp("left")}
+        onToggle={data.onToggleBranches ? () => data.onToggleBranches?.("left") : undefined}
+      />
+      <FollowUpPlus
+        side="right"
+        available={sides.right}
+        selected={selected}
+        count={data.branchCounts?.right}
+        collapsed={data.collapsedSides?.right}
+        onClick={() => onFollowUp("right")}
+        onToggle={data.onToggleBranches ? () => data.onToggleBranches?.("right") : undefined}
+      />
       <FollowUpPlus side="bottom" available={sides.below} selected={selected} onClick={() => onFollowUp("below")} />
     </>
   );
@@ -559,8 +584,10 @@ function ToolGroupCard(props: {
                     available={canFollowUp(tool) && Boolean(props.toolFollowUp)}
                     selected={false}
                     count={props.toolFollowUp?.counts[tool.id] ?? 0}
+                    collapsed={props.toolFollowUp?.collapsed[tool.id]}
                     hoverScope="tool"
                     onClick={() => props.toolFollowUp?.onFollowUp(tool)}
+                    onToggle={props.toolFollowUp ? () => props.toolFollowUp?.onToggle(tool) : undefined}
                   />
                 </div>
               ))}

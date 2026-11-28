@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canFollowUp, contextListLine, followUpSides } from "./followUp";
+import { canFollowUp, followUpSides } from "./followUp";
 
 describe("canFollowUp", () => {
   it.each([
@@ -50,14 +50,3 @@ describe("followUpSides", () => {
   });
 });
 
-describe("contextListLine", () => {
-  it("names the thread by its question and the card by its label", () => {
-    expect(contextListLine("Monthly orders", "Run SQL")).toBe("Monthly orders · Run SQL");
-  });
-
-  it("shortens long thread questions to 24 characters", () => {
-    expect(contextListLine("How many artifacts are in each conservation category?", "Final Result")).toBe(
-      "How many artifacts are i… · Final Result",
-    );
-  });
-});

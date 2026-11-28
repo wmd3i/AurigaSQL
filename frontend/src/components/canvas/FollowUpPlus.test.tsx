@@ -21,10 +21,17 @@ describe("FollowUpPlus", () => {
     expect(html).not.toContain("opacity-0");
   });
 
-  it("keeps the branch count visible and offers + N on hover", () => {
-    const html = renderToStaticMarkup(<FollowUpPlus side="right" count={2} available selected={false} onClick={noop} />);
+  it("toggles the side's follow-ups from the count and adds from a separate plus", () => {
+    const html = renderToStaticMarkup(<FollowUpPlus side="right" count={2} available selected={false} onClick={noop} onToggle={noop} />);
+    expect(html).toContain('aria-label="Hide 2 follow-ups on the right"');
+    expect(html).toContain('aria-label="Follow up on the right"');
     expect(html).toContain(">2<");
-    expect(html).toContain('aria-label="Follow up on the right (2 already)"');
+  });
+
+  it("offers to show the follow-ups again once collapsed", () => {
+    const html = renderToStaticMarkup(<FollowUpPlus side="left" count={1} collapsed available selected={false} onClick={noop} onToggle={noop} />);
+    expect(html).toContain('aria-label="Show 1 follow-up on the left"');
+    expect(html).toContain('data-collapsed="true"');
   });
 
   it("shows a plain count badge when the side cannot take another follow-up", () => {
@@ -36,7 +43,7 @@ describe("FollowUpPlus", () => {
   it("becomes visible when reached with the keyboard", () => {
     const plus = renderToStaticMarkup(<FollowUpPlus side="right" available selected={false} onClick={noop} />);
     expect(plus).toContain("group-focus-visible:opacity-100");
-    const pill = renderToStaticMarkup(<FollowUpPlus side="right" count={2} available selected={false} onClick={noop} />);
-    expect(pill).toContain("group-focus-visible:flex");
+    const withCount = renderToStaticMarkup(<FollowUpPlus side="right" count={2} available selected={false} onClick={noop} onToggle={noop} />);
+    expect(withCount).toContain("group-focus-visible:opacity-100");
   });
 });

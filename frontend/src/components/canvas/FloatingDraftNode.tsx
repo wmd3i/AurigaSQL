@@ -12,7 +12,7 @@ export type FloatingDraftData = {
   onOpenLlmConfig?: () => void;
   title?: string;
   /** Follow-up drafts: the card they start from and the cards they inherit. */
-  context?: { anchorLabel: string; lines: string[] };
+  context?: { anchorLabel: string; count: number };
   placeholder?: string;
   initialText?: string;
   initialTextToken?: number;
@@ -160,7 +160,7 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
             <GripVertical className="h-4 w-4" />
             {data.title ?? "Workspace"}
           </div>
-          {data.context && <DraftContextLine anchorLabel={data.context.anchorLabel} lines={data.context.lines} />}
+          {data.context && <DraftContextLine anchorLabel={data.context.anchorLabel} count={data.context.count} />}
         </div>
 
         <textarea

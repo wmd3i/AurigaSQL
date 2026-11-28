@@ -6,6 +6,7 @@ import {
   sideSiblingIndex,
   toolBranchTotal,
   upsertBranchDraft,
+  collapsedThreadIds,
   type BranchDraftKey,
 } from "./branchPlacement";
 
@@ -89,5 +90,25 @@ describe("upsertBranchDraft", () => {
     const right: BranchDraftKey & { id: string } = { id: "d1", parentCanvasNodeId: "P:n2", side: "right", parentNodeId: "n2" };
     const left = { ...right, id: "d2", side: "left" as const };
     expect(upsertBranchDraft([right], left)).toEqual({ drafts: [right, left], selectedId: "d2" });
+  });
+});
+
+describe("collapsedThreadIds", () => {
+  const branches = new Map([
+    ["A:n11", [{ id: "B", side: "right" as const, parentNodeId: "n11" }, { id: "C", side: "right" as const, parentNodeId: "n11" }, { id: "D", side: "below" as const, parentNodeId: "n11" }]],
+    ["B:n0", [{ id: "E", side: "left" as const, parentNodeId: "n0" }]],
+    ["A:n8", [{ id: "T", side: "right" as const, parentNodeId: "n5" }, { id: "U", side: "right" as const, parentNodeId: "n6" }]],
+  ]);
+
+  it("hides every follow-up on a collapsed side, with their own follow-ups", () => {
+    expect([...collapsedThreadIds(branches, new Set(["A:n11|right"]))].sort()).toEqual(["B", "C", "E"]);
+  });
+
+  it("hides only the follow-ups of a collapsed sub-tool", () => {
+    expect([...collapsedThreadIds(branches, new Set(["A:n8|tool:n5"]))]).toEqual(["T"]);
+  });
+
+  it("hides nothing when nothing is collapsed", () => {
+    expect(collapsedThreadIds(branches, new Set()).size).toBe(0);
   });
 });

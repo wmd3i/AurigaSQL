@@ -41,11 +41,12 @@ import {
   branchHandles,
   branchPosition,
   resolveAnchorCanvasId,
+  collapsedThreadIds,
   sideSiblingIndex,
   toolBranchTotal,
   upsertBranchDraft,
 } from "../../lib/branchPlacement";
-import { contextListLine, followUpSides as sidesForFollowUp, type FollowUpCard } from "../../lib/followUp";
+import { followUpSides as sidesForFollowUp, type FollowUpCard } from "../../lib/followUp";
 import { branchContextCards } from "../../lib/branchContext";
 
 const COLUMN_W = 384;
@@ -737,6 +738,22 @@ function CanvasInner(props: {
     return out;
   }, [branchesByAnchor]);
 
+  /** Collapsed follow-up groups, `<anchor canvas id>|<side>` or `<anchor canvas id>|tool:<tool id>` (session only). */
+  const [collapsedBranchKeys, setCollapsedBranchKeys] = useState<Set<string>>(() => new Set());
+  const hiddenThreadIds = useMemo(
+    () => collapsedThreadIds(branchesByAnchor, collapsedBranchKeys),
+    [branchesByAnchor, collapsedBranchKeys],
+  );
+  const setBranchGroupCollapsed = useCallback((key: string, collapsed: boolean) => {
+    setCollapsedBranchKeys((current) => {
+      if (current.has(key) === collapsed) return current;
+      const next = new Set(current);
+      if (collapsed) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+
   /** Open (or re-select) the follow-up draft for one side of a card. */
   const addBranchDraft = useCallback(
     (parentCanvasNodeId: string, target: BranchTarget, side: CanvasBranchSide, subToolId?: string) => {
@@ -1012,9 +1029,7 @@ function CanvasInner(props: {
             placeholder: draft.subToolId ? "Ask a follow-up from this tool..." : "Ask a follow-up from this card...",
             context: {
               anchorLabel: draft.target.label,
-              lines: branchContextCards(props.conversations, draft.target).map((card) =>
-                contextListLine(card.threadTitle, cardLabel(card.node)),
-              ),
+              count: branchContextCards(props.conversations, draft.target).length,
             },
             onOpenLlmConfig: props.onOpenLlmConfig,
             onSubmit: async (text: string, toneId: CanvasToneId) => {
@@ -1029,6 +1044,7 @@ function CanvasInner(props: {
       });
 
       ordered.forEach((conv, ci) => {
+        if (hiddenThreadIds.has(conv.id)) return;
         const groups = buildThreadGroups(threadNodes(conv));
         if (groups.length === 0) return;
 
@@ -1117,15 +1133,26 @@ function CanvasInner(props: {
                 sides: undefined,
                 counts: undefined,
                 onFollowUp: undefined,
+                collapsedSides: undefined,
+                onToggleBranches: undefined,
                 tool: {
                   counts,
                   total: toolBranchTotal(counts),
-                  onFollowUp: (tool: ThreadNode) =>
-                    addBranchDraft(id, { parentThreadId: conv.id, parentNodeId: tool.id, label: cardLabel(tool), mode: "manual" }, "right", tool.id),
+                  collapsed: Object.fromEntries(
+                    Object.keys(counts).map((toolId) => [toolId, collapsedBranchKeys.has(`${id}|tool:${toolId}`)]),
+                  ),
+                  onFollowUp: (tool: ThreadNode) => {
+                    setBranchGroupCollapsed(`${id}|tool:${tool.id}`, false);
+                    addBranchDraft(id, { parentThreadId: conv.id, parentNodeId: tool.id, label: cardLabel(tool), mode: "manual" }, "right", tool.id);
+                  },
+                  onToggle: (tool: ThreadNode) => {
+                    const key = `${id}|tool:${tool.id}`;
+                    setBranchGroupCollapsed(key, !collapsedBranchKeys.has(key));
+                  },
                 },
               };
             }
-            if (!anchorNodeId) return { sides: undefined, counts: undefined, onFollowUp: undefined, tool: undefined };
+            if (!anchorNodeId) return { sides: undefined, counts: undefined, onFollowUp: undefined, collapsedSides: undefined, onToggleBranches: undefined, tool: undefined };
             return {
               sides: sidesForFollowUp({
                 card: tn as FollowUpCard,
@@ -1138,14 +1165,25 @@ function CanvasInner(props: {
                 left: anchorBranches.filter((branch) => branch.side === "left").length,
                 right: anchorBranches.filter((branch) => branch.side === "right").length,
               },
-              onFollowUp: (side: CanvasBranchSide) =>
+              collapsedSides: {
+                left: collapsedBranchKeys.has(`${id}|left`),
+                right: collapsedBranchKeys.has(`${id}|right`),
+              },
+              onToggleBranches: (side: "left" | "right") => {
+                const key = `${id}|${side}`;
+                setBranchGroupCollapsed(key, !collapsedBranchKeys.has(key));
+              },
+              onFollowUp: (side: CanvasBranchSide) => {
+                // Adding to a collapsed side expands it, or the new thread would appear hidden.
+                if (side !== "below") setBranchGroupCollapsed(`${id}|${side}`, false);
                 addBranchDraft(id, {
                   parentThreadId: conv.id,
                   parentNodeId: anchorNodeId,
                   label: isErrorCard ? "Error" : cardLabel(tn),
                   mode: tn.kind === "question" || (tn.kind === "answer" && conv.parentThreadId === null) ? "auto" : "manual",
                   anchorError: isErrorCard || undefined,
-                }, side),
+                }, side);
+              },
               tool: undefined,
             };
           })();
@@ -1165,6 +1203,8 @@ function CanvasInner(props: {
               followUpSides: followUp.sides,
               branchCounts: followUp.counts,
               onFollowUp: followUp.onFollowUp,
+              collapsedSides: followUp.collapsedSides,
+              onToggleBranches: followUp.onToggleBranches,
               onRevert:
                 !props.onRevertConversation || (gi === 0 && tn.kind === "question" && !branchOrigin)
                   ? undefined
@@ -1203,6 +1243,9 @@ function CanvasInner(props: {
   }, [
     branchesByAnchor,
     branchDrafts,
+    hiddenThreadIds,
+    collapsedBranchKeys,
+    setBranchGroupCollapsed,
     props.conversations,
     addBranchDraft,
     columnIndex,
@@ -1230,6 +1273,7 @@ function CanvasInner(props: {
     const draftEdge = { strokeDasharray: "6 6", stroke: "var(--accent)", strokeWidth: 1.5, opacity: 0.55 };
 
     ordered.forEach((conv) => {
+      if (hiddenThreadIds.has(conv.id)) return;
       const groups = buildThreadGroups(threadNodes(conv));
       if (groups.length === 0) return;
 
@@ -1274,7 +1318,7 @@ function CanvasInner(props: {
     });
 
     return es;
-  }, [allConversationById, branchDrafts, ordered, threadNodes]);
+  }, [allConversationById, branchDrafts, hiddenThreadIds, ordered, threadNodes]);
 
   useEffect(() => {
     if (!focusedCanvasThreadId || !nodesInitialized || focusedThreadNodeIds.length === 0) return;

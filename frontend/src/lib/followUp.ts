@@ -41,10 +41,3 @@ export function followUpSides(input: {
   return { left: true, right: true, below };
 }
 
-const CONTEXT_THREAD_NAME_MAX = 24;
-
-/** One row of the draft's "includes N earlier cards" list: `<thread question> · <card label>`. */
-export function contextListLine(threadTitle: string, cardLabel: string): string {
-  const name = threadTitle.length > CONTEXT_THREAD_NAME_MAX ? `${threadTitle.slice(0, CONTEXT_THREAD_NAME_MAX)}…` : threadTitle;
-  return `${name} · ${cardLabel}`;
-}
