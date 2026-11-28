@@ -4,9 +4,11 @@ import { cn } from "../../lib/cn";
 
 export type FollowUpPlusSide = "left" | "right" | "bottom";
 
+/* Left/right controls sit just outside the card edge (never over the card's own
+   buttons, e.g. a tool card's fold chevron); the bottom plus straddles the bottom edge. */
 const POSITION: Record<FollowUpPlusSide, string> = {
-  left: "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2",
-  right: "right-0 top-1/2 translate-x-1/2 -translate-y-1/2",
+  left: "right-full top-1/2 mr-1.5 -translate-y-1/2",
+  right: "left-full top-1/2 ml-1.5 -translate-y-1/2",
   bottom: "bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2",
 };
 

@@ -46,4 +46,13 @@ describe("FollowUpPlus", () => {
     const withCount = renderToStaticMarkup(<FollowUpPlus side="right" count={2} available selected={false} onClick={noop} onToggle={noop} />);
     expect(withCount).toContain("group-focus-visible:opacity-100");
   });
+
+  it("keeps side controls fully outside the card so they never cover its own buttons", () => {
+    const right = renderToStaticMarkup(<FollowUpPlus side="right" count={2} available selected onClick={noop} onToggle={noop} />);
+    expect(right).toContain("left-full");
+    expect(right).not.toContain("translate-x-1/2");
+    const left = renderToStaticMarkup(<FollowUpPlus side="left" available selected onClick={noop} />);
+    expect(left).toContain("right-full");
+    expect(left).not.toContain("-translate-x-1/2");
+  });
 });
