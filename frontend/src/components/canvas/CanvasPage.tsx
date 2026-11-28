@@ -1024,7 +1024,13 @@ function CanvasInner(props: {
           parentForCanvasNode && conv.parentNodeId
             ? threadNodes(parentForCanvasNode).find((node) => node.id === conv.parentNodeId) ?? null
             : null;
-        const branchOrigin = parentAnchorNode ? { label: cardLabel(parentAnchorNode), kind: conv.canvasBranchSide === "below" ? ("follow_up" as const) : ("fork" as const) } : null;
+        const branchOrigin =
+          parentAnchorNode && parentCanvasNodeId
+            ? {
+                label: conv.parentAnchorError && parentCanvasNodeId.endsWith(":error") ? "Error" : cardLabel(parentAnchorNode),
+                onJump: () => focusNode(parentCanvasNodeId),
+              }
+            : null;
         const side: CanvasBranchSide = conv.canvasBranchSide ?? "right";
         const siblingIndex = parentCanvasNodeId
           ? Math.max(0, sideSiblingIndex(branchesByAnchor.get(parentCanvasNodeId) ?? [], conv.id))

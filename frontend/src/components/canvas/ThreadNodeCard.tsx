@@ -20,6 +20,7 @@ import { cn } from "../../lib/cn";
 import { canFollowUp, type FollowUpSides } from "../../lib/followUp";
 import type { CanvasBranchSide } from "../../state/types";
 import { FollowUpPlus } from "./FollowUpPlus";
+import { FollowUpOrigin } from "./FollowUpOrigin";
 import type { ThreadNode } from "../../lib/buildNodes";
 import { formatCell, parseResultTable } from "../../lib/parseResultTable";
 import { stripSystemNote } from "../../lib/stripSystemNote";
@@ -58,7 +59,8 @@ export type CardData = {
   onRevert?: () => void;
   onAnswer?: (text: string) => void | Promise<void>;
   onInspectTool?: (tool: ThreadNode, openDetail?: boolean) => void;
-  branchOrigin?: { label: string; kind?: "follow_up" | "fork" };
+  /** First card of a follow-up thread: the source card and a jump back to it. */
+  branchOrigin?: { label: string; onJump: () => void };
   expandAllToken?: number;
   expandAllOpen?: boolean;
   compact?: boolean;
@@ -82,13 +84,6 @@ function SideHandles(props: { targetStyle?: CSSProperties; sourceStyle?: CSSProp
       <Handle id="bottom" type="source" position={Position.Bottom} style={props.sourceStyle} className={HANDLE_CLASS} isConnectable={false} />
     </>
   );
-}
-
-function branchOriginText(branchOrigin: NonNullable<CardData["branchOrigin"]>): string {
-  if (branchOrigin.kind === "fork") {
-    return `Parallel path from ${branchOrigin.label}`;
-  }
-  return `Continues from ${branchOrigin.label}`;
 }
 
 function ExpandableClamp(props: { children: ReactNode; collapsedHeight?: number }) {
@@ -856,15 +851,12 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
               <div className="mb-1">
                 <div className="flex items-center gap-1">
                   <CardCopyButton card={tn} compact={compact} />
-                  <span className="text-[11px] font-medium text-accent">
-                    {branchOrigin ? (branchOrigin.kind === "fork" ? "Fork" : "Follow-up") : "You asked"}
-                  </span>
+                  {branchOrigin ? (
+                    <FollowUpOrigin label={branchOrigin.label} onJump={branchOrigin.onJump} />
+                  ) : (
+                    <span className="text-[11px] font-medium text-accent">You asked</span>
+                  )}
                 </div>
-                {branchOrigin && (
-                  <div className="mt-0.5 truncate text-[10.5px] font-medium text-faint">
-                    {branchOriginText(branchOrigin)}
-                  </div>
-                )}
               </div>
             )}
             {isAnswer && (
