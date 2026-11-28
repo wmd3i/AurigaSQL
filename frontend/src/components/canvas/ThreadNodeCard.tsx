@@ -416,13 +416,13 @@ function ToolGroupCard(props: {
     if (!props.open || !listRef.current) return;
     const listEl = listRef.current;
     const measure = () => {
-      const listRect = listEl.getBoundingClientRect();
       const centers: Record<string, number> = {};
       props.tools.forEach((tool) => {
         const itemEl = listEl.querySelector<HTMLElement>(`[data-tool-card-id="${CSS.escape(tool.id)}"]`);
         if (!itemEl) return;
-        const itemRect = itemEl.getBoundingClientRect();
-        centers[tool.id] = itemRect.top - listRect.top + itemHeight / 2;
+        // Layout offsets, not getBoundingClientRect: the canvas zoom scales client rects,
+        // which pulled the connector ends towards the top whenever zoom was below 100%.
+        centers[tool.id] = itemEl.offsetTop - listEl.offsetTop + itemHeight / 2;
       });
       setConnectorLayout((current) => {
         const nextHeight = Math.max(itemHeight, listEl.offsetHeight);
