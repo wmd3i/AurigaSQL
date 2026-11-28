@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { branchContextCards, formatNodeForBranchContext } from "./branchContext";
+import { branchContextCards, buildBranchParentContext, formatNodeForBranchContext } from "./branchContext";
 import type { Conversation } from "../state/types";
 import type { TimelineEvent } from "./buildTimeline";
 
@@ -69,5 +69,51 @@ describe("formatNodeForBranchContext", () => {
     expect(formatNodeForBranchContext({ id: "n1", kind: "agent_question", body: "Which date?" })).toBe(
       "Assistant asked user: Which date?",
     );
+  });
+});
+
+describe("buildBranchParentContext", () => {
+  // n0 question, then n1..n10 tools; tool i's result is "MARK<i> " + 2000 x's
+  const longThread = conv(
+    "L",
+    Array.from({ length: 10 }, (_, i) => sqlTool(`l${i + 1}`, `MARK${i + 1} ${"x".repeat(2000)}`)).flat(),
+  );
+
+  it("keeps the anchor card and drops the oldest cards when over the limit", () => {
+    const text = buildBranchParentContext([longThread], { parentThreadId: "L", parentNodeId: "n10", label: "x" })!;
+    expect(text.length).toBeLessThanOrEqual(14000);
+    expect(text).toContain("Original user query:");
+    expect(text).toContain("MARK10");
+    expect(text).not.toContain("MARK1 ");
+    expect(text).toMatch(/\[\d+ earlier cards omitted\]/);
+  });
+
+  it("excludes cards after a mid-thread anchor", () => {
+    const text = buildBranchParentContext([threadA], { parentThreadId: "A", parentNodeId: "n2", label: "x" })!;
+    expect(text).toContain("A-r2");
+    expect(text).not.toContain("A-r3");
+  });
+
+  it("appends the error line when branching from an error card", () => {
+    const failed = conv("E", sqlTool("e1", "E-r1"), { status: "error", error: "boom" });
+    const text = buildBranchParentContext([failed], { parentThreadId: "E", parentNodeId: "n1", label: "Error", anchorError: true })!;
+    expect(text.endsWith("Thread ended with error: boom")).toBe(true);
+  });
+
+  it("has no omitted line for a single-card thread", () => {
+    const text = buildBranchParentContext([conv("S", [])], { parentThreadId: "S", parentNodeId: "n0", label: "x" })!;
+    expect(text).toContain("S question");
+    expect(text).not.toMatch(/omitted/);
+  });
+
+  it("stays within the limit even when the anchor card alone is too long", () => {
+    const big = conv("G", sqlTool("g1", "y".repeat(8000)));
+    const text = buildBranchParentContext([big], { parentThreadId: "G", parentNodeId: "n1", label: "x" }, 3000)!;
+    expect(text.length).toBeLessThanOrEqual(3000);
+    expect(text).toContain("[Card 2: tool/execute_sql]");
+  });
+
+  it("returns undefined without a target", () => {
+    expect(buildBranchParentContext([threadA], null)).toBeUndefined();
   });
 });

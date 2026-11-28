@@ -14,15 +14,13 @@ import { bff, type DemoGroupId, type DataSource, type ModelInfo } from "./api/bf
 import { ModelContext } from "./state/modelContext";
 import { loadAppState, saveAppState } from "./state/persistence";
 import { conversationWorkId } from "./lib/conversationHistory";
-import { buildNodes, type ThreadNode } from "./lib/buildNodes";
+import { buildBranchParentContext } from "./lib/branchContext";
 import type { Conversation } from "./state/types";
 import type { BranchTarget } from "./components/canvas/CanvasComposer";
 import type { CanvasToneId } from "./lib/canvasTones";
 import { PendingChatsContext } from "./state/pendingChatsContext";
 import { SidebarWidthContext } from "./state/sidebarWidthContext";
 
-const BRANCH_FIELD_LIMIT = 2400;
-const BRANCH_CONTEXT_LIMIT = 14000;
 const CANVAS_TRANSITION_MS = 520;
 type CanvasTransitionPhase = "enter" | "exit" | null;
 type CanvasSourceMismatch = {
@@ -52,86 +50,6 @@ function canvasWorkIdForStart(
     return parent ? conversationWorkId(conversations, parent) : branchTarget.parentThreadId;
   }
   return currentCanvasWorkId ?? createCanvasWorkId();
-}
-
-function compactForBranchContext(text: string, limit = BRANCH_FIELD_LIMIT): string {
-  if (text.length <= limit) return text;
-  return `${text.slice(0, limit).trimEnd()}\n...[truncated for branch context]`;
-}
-
-function formatNodeForBranchContext(node: ThreadNode): string {
-  const parts: string[] = [];
-  switch (node.kind) {
-    case "question":
-      parts.push(`User: ${compactForBranchContext(node.body)}`);
-      break;
-    case "thinking":
-      parts.push(`Assistant reasoning: ${compactForBranchContext(node.body, 1200)}`);
-      break;
-    case "tool":
-      parts.push(`Tool call: ${node.title ?? "tool"}`);
-      if (node.summary) parts.push(`Purpose: ${compactForBranchContext(node.summary, 800)}`);
-      if (node.reasoning) parts.push(`Reasoning: ${compactForBranchContext(node.reasoning, 1000)}`);
-      if (node.body) parts.push(`Input:\n${compactForBranchContext(node.body, 1400)}`);
-      if (node.result !== undefined) parts.push(`Result:\n${compactForBranchContext(node.result)}`);
-      break;
-    case "agent_question":
-      parts.push(`Assistant asked user: ${compactForBranchContext(node.body)}`);
-      break;
-    case "user_answer":
-      parts.push(`User answered: ${compactForBranchContext(node.body)}`);
-      break;
-    case "answer":
-      parts.push("Assistant submitted final SQL:");
-      if (node.body) parts.push(compactForBranchContext(node.body, 2000));
-      if (node.result !== undefined) parts.push(`Execution result:\n${compactForBranchContext(node.result)}`);
-      break;
-    case "agent_text":
-      parts.push(`Assistant: ${compactForBranchContext(node.body)}`);
-      break;
-  }
-  return parts.join("\n");
-}
-
-function conversationTranscript(conv: Conversation, throughNodeId?: string | null): string {
-  const nodes = buildNodes(conv.timeline, conv.title);
-  const endIndex = throughNodeId ? nodes.findIndex((node) => node.id === throughNodeId) : -1;
-  const included = endIndex >= 0 ? nodes.slice(0, endIndex + 1) : nodes;
-  return [
-    `Thread ${conv.id}`,
-    `Database: ${conv.database}`,
-    `Original user query: ${conv.title}`,
-    ...included.map((node, index) => `\n[Card ${index + 1}: ${node.kind}${node.title ? `/${node.title}` : ""}]\n${formatNodeForBranchContext(node)}`),
-  ].join("\n");
-}
-
-function buildBranchParentContext(conversations: Conversation[], target?: BranchTarget | null): string | undefined {
-  if (!target) return undefined;
-  const byId = new Map(conversations.map((conv) => [conv.id, conv]));
-  const parent = byId.get(target.parentThreadId);
-  if (!parent) return undefined;
-
-  const chain: Conversation[] = [];
-  const seen = new Set<string>();
-  let current: Conversation | undefined = parent;
-  while (current && !seen.has(current.id)) {
-    seen.add(current.id);
-    chain.unshift(current);
-    current = current.parentThreadId ? byId.get(current.parentThreadId) : undefined;
-  }
-
-  const sections = chain.map((conv, index) =>
-    conversationTranscript(conv, index === chain.length - 1 ? target.parentNodeId : null),
-  );
-
-  const context = [
-    "The new user message starts a branch from an existing canvas thread.",
-    `Branch anchor: thread ${target.parentThreadId}, card ${target.parentNodeId} (${target.label}).`,
-    "Treat the next user message as a follow-up question from that exact branch anchor, not as an unrelated new task. Use the compact parent-thread transcript below as prior conversation context. Continue from the branch anchor and preserve user intent, assumptions, SQL exploration, tool results, and clarifications. Re-fetch schema or knowledge if the compact context is insufficient.",
-    "",
-    sections.join("\n\n---\n\n"),
-  ].join("\n");
-  return compactForBranchContext(context, BRANCH_CONTEXT_LIMIT);
 }
 
 export default function App() {

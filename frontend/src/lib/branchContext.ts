@@ -90,3 +90,72 @@ export function branchContextCards(conversations: Conversation[], target: Branch
     return included.map((node, indexInThread) => ({ threadId: conv.id, threadTitle: conv.title, node, indexInThread }));
   });
 }
+
+const TRUNCATION_SUFFIX = "\n...[truncated for branch context]";
+
+function threadHeader(conv: Pick<Conversation, "id" | "database" | "title">): string {
+  return [`Thread ${conv.id}`, `Database: ${conv.database}`, `Original user query: ${conv.title}`].join("\n");
+}
+
+function cardText(card: BranchContextCard): string {
+  const { node } = card;
+  return `\n[Card ${card.indexInThread + 1}: ${node.kind}${node.title ? `/${node.title}` : ""}]\n${formatNodeForBranchContext(node)}`;
+}
+
+/**
+ * The parent_context sent with a follow-up. Always keeps the intro, the root
+ * thread's header, the anchor card and (for an Error-card follow-up) the error
+ * line; then adds earlier cards from the anchor backwards while they fit, and
+ * replaces the rest with one "[N earlier cards omitted]" line.
+ */
+export function buildBranchParentContext(
+  conversations: Conversation[],
+  target?: BranchContextTarget | null,
+  limit = BRANCH_CONTEXT_LIMIT,
+): string | undefined {
+  if (!target) return undefined;
+  const cards = branchContextCards(conversations, target);
+  if (cards.length === 0) return undefined;
+  const byId = new Map(conversations.map((conv) => [conv.id, conv]));
+  const parent = byId.get(target.parentThreadId);
+  const intro = [
+    "The new user message starts a branch from an existing canvas thread.",
+    `Branch anchor: thread ${target.parentThreadId}, card ${target.parentNodeId} (${target.label}).`,
+    "Treat the next user message as a follow-up question from that exact branch anchor, not as an unrelated new task. Use the compact parent-thread transcript below as prior conversation context. Continue from the branch anchor and preserve user intent, assumptions, SQL exploration, tool results, and clarifications. Re-fetch schema or knowledge if the compact context is insufficient.",
+    "",
+  ].join("\n");
+  const errorLine = target.anchorError ? `Thread ended with error: ${parent?.error ?? "error"}` : null;
+  const texts = cards.map(cardText);
+  const anchorIndex = cards.length - 1;
+
+  const render = (firstKept: number, anchorText = texts[anchorIndex]): string => {
+    const sections: string[][] = [];
+    let currentThread: string | null = null;
+    const pushHeader = (threadId: string) => {
+      const conv = byId.get(threadId);
+      sections.push([conv ? threadHeader(conv) : `Thread ${threadId}`]);
+      currentThread = threadId;
+    };
+    pushHeader(cards[0].threadId);
+    for (let i = firstKept; i <= anchorIndex; i++) {
+      if (cards[i].threadId !== currentThread) pushHeader(cards[i].threadId);
+      const section = sections[sections.length - 1];
+      if (i === firstKept && firstKept > 0) section.push(`[${firstKept} earlier cards omitted]`);
+      section.push(i === anchorIndex ? anchorText : texts[i]);
+    }
+    const body = sections.map((lines) => lines.join("\n")).join("\n\n---\n\n");
+    return `${intro}\n${body}${errorLine ? `\n\n${errorLine}` : ""}`;
+  };
+
+  let firstKept = anchorIndex;
+  while (firstKept > 0 && render(firstKept - 1).length <= limit) firstKept -= 1;
+
+  let text = render(firstKept);
+  if (text.length > limit) {
+    const overhead = text.length - texts[anchorIndex].length;
+    const room = Math.max(0, limit - overhead - TRUNCATION_SUFFIX.length);
+    text = render(firstKept, compactForBranchContext(texts[anchorIndex], room));
+    if (text.length > limit) text = text.slice(0, limit);
+  }
+  return text;
+}
