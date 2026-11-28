@@ -2,10 +2,10 @@
 
 /* Semantic tokens. Components must ONLY use these via the @theme utilities
    below — never raw palette colors. The theme is chosen by `data-theme` on
-   <html> (see src/lib/theme.ts): light (default) or dark, both on a neutral
-   grey scale like Open WebUI. The accent color is chosen separately by
-   `data-accent` (plain default, teal, indigo, violet, amber), with its own light and
-   dark shades so it stays readable in both. */
+   <html> (see src/lib/theme.ts): light (default), light-yellow (warm cream paper),
+   or dark. The accent color is chosen separately by `data-accent` (plain default,
+   teal, indigo, violet, amber, yellow), with its own light and dark shades so
+   it stays readable in both. */
 :root {
   color-scheme: light;
   --surface: #f8f8f8;      /* page / sidebar background */
@@ -28,6 +28,30 @@
   --overlay: rgba(0, 0, 0, 0.3);
   --dot: rgba(0, 0, 0, 0.1);
   --shadow: rgba(0, 0, 0, 0.12);
+}
+
+:root[data-theme="light-yellow"] {
+  color-scheme: light;
+  --surface: #fdf4c8;
+  --canvas: #fefbe9;
+  --card: #fffdf5;
+  --ink: #1c1917;
+  --muted: #665d47;
+  --faint: #9a8f75;
+  --line: #ebe0b2;
+  --hover: #faefc0;
+  --accent: #1c1917;
+  --accent-soft: #f5e9b5;
+  --accent-ink: #ffffff;
+  --invert: #1c1917;
+  --invert-ink: #fffdf5;
+  --pause: var(--accent);
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
+  --shell-bg: #fefbe9;
+  --overlay: rgba(28, 25, 23, 0.28);
+  --dot: rgba(133, 100, 12, 0.14);
+  --shadow: rgba(102, 77, 15, 0.10);
 }
 
 :root[data-theme="dark"] {
@@ -60,10 +84,14 @@
 :root[data-accent="indigo"] { --accent: #4f46e5; --accent-soft: #eef2ff; }
 :root[data-accent="violet"] { --accent: #7c3aed; --accent-soft: #f5f3ff; }
 :root[data-accent="amber"] { --accent: #b45309; --accent-soft: #fef3c7; }
+:root[data-accent="yellow"] { --accent: #a16207; --accent-soft: #fef9c3; }
+:root[data-theme="light-yellow"][data-accent="yellow"] { --accent: #a16207; --accent-soft: #fef08a; }
+:root[data-theme="light-yellow"][data-accent="amber"] { --accent: #b45309; --accent-soft: #fde68a; }
 :root[data-theme="dark"][data-accent="teal"] { --accent: #2dd4bf; }
 :root[data-theme="dark"][data-accent="indigo"] { --accent: #818cf8; }
 :root[data-theme="dark"][data-accent="violet"] { --accent: #a78bfa; }
 :root[data-theme="dark"][data-accent="amber"] { --accent: #fbbf24; }
+:root[data-theme="dark"][data-accent="yellow"] { --accent: #fde047; }
 :root[data-theme="dark"]:not([data-accent="plain"])[data-accent] { --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent); }
 
 @theme inline {

@@ -7,7 +7,7 @@ import { HomeSidebar } from "./HomeSidebar";
 import { HomeHero } from "./HomeHero";
 import { HomeComposer } from "./HomeComposer";
 import { DataSourceTabs } from "./DatabaseTabs";
-import { QuestionCards } from "./QuestionCards";
+import { filterSampleTasks, QuestionCards } from "./QuestionCards";
 import type { QueryMode } from "../../state/types";
 import { FlowModeSwitch } from "../FlowModeSwitch";
 import type { BranchTarget } from "../canvas/CanvasComposer";
@@ -80,6 +80,7 @@ export function HomePage(props: {
   const activeConversation = props.conversations.find((conversation) => conversation.id === props.activeId) ?? null;
   const connectedSourceIds = new Set(sources.filter((source) => source.ready).map((source) => source.id));
   const visibleTasks = tasks.filter((task) => connectedSourceIds.has(task.source_id));
+  const { tasks: sampleTasks, filteredBySourceName } = filterSampleTasks(visibleTasks, selectedSource);
   const taskDatabases = Array.from(new Set(visibleTasks.map((task) => task.database))).sort((a, b) => a.localeCompare(b));
 
   async function refreshSources(selectId?: string | null) {
@@ -350,11 +351,11 @@ export function HomePage(props: {
           <div className="-ml-3 flex justify-start sm:-ml-4">
             <FlowModeSwitch mode="agent" onModeChange={handleModeChange} />
           </div>
-          <div className="mx-auto flex w-full max-w-5xl flex-col pt-14 sm:pt-20">
-            <div className="mb-12">
+          <div className="mx-auto flex w-full max-w-4xl flex-col pt-3 sm:pt-5">
+            <div className="mb-6">
               <HomeHero variant="default" />
             </div>
-            <div className="mx-auto w-full max-w-4xl space-y-5">
+            <div className="w-full space-y-4">
               <div className="relative w-full">
                 <HomeComposer
                   value={draft}
@@ -391,11 +392,15 @@ export function HomePage(props: {
                 />
               )}
             </div>
-            <div className="mt-20 transition-all duration-300 ease-out">
+            <div className="mt-6 w-full transition-all duration-300 ease-out">
               <QuestionCards
-                tasks={visibleTasks}
+                tasks={sampleTasks}
+                sources={sources}
+                filteredBySourceName={filteredBySourceName}
                 onPick={(t) => {
                   setDraft(t.amb_user_query);
+                  const matched = sources.find((source) => source.id === t.source_id && source.ready);
+                  if (matched) selectSource(matched);
                 }}
               />
             </div>
