@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { ArrowUp, Check, Copy, GripVertical, Loader2 } from "lucide-react";
 import { cn } from "../../lib/cn";
+import { DraftContextLine } from "./DraftContextLine";
 import { ModelPicker } from "../ModelPicker";
 import { CANVAS_TONES, type CanvasToneId } from "../../lib/canvasTones";
 import { scheduleSubmissionNotices } from "../../lib/submissionWait";
@@ -10,6 +11,8 @@ export type FloatingDraftData = {
   onSubmit: (text: string, toneId: CanvasToneId) => boolean | void | Promise<boolean | void>;
   onOpenLlmConfig?: () => void;
   title?: string;
+  /** Follow-up drafts: the card they start from and the cards they inherit. */
+  context?: { anchorLabel: string; lines: string[] };
   placeholder?: string;
   initialText?: string;
   initialTextToken?: number;
@@ -152,11 +155,12 @@ export function FloatingDraftNode({ data, selected }: NodeProps<FloatingDraftNod
           backgroundColor: selected ? tone.fill : "rgba(255,255,255,0.96)",
         }}
       >
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-col">
           <div className="flex items-center gap-2 text-[14px] font-semibold text-muted">
             <GripVertical className="h-4 w-4" />
             {data.title ?? "Workspace"}
           </div>
+          {data.context && <DraftContextLine anchorLabel={data.context.anchorLabel} lines={data.context.lines} />}
         </div>
 
         <textarea

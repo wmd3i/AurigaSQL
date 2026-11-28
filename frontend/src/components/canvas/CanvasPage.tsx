@@ -45,7 +45,8 @@ import {
   toolBranchTotal,
   upsertBranchDraft,
 } from "../../lib/branchPlacement";
-import { followUpSides as sidesForFollowUp, type FollowUpCard } from "../../lib/followUp";
+import { contextListLine, followUpSides as sidesForFollowUp, type FollowUpCard } from "../../lib/followUp";
+import { branchContextCards } from "../../lib/branchContext";
 
 const COLUMN_W = 384;
 const GAP_Y = 50;
@@ -993,6 +994,12 @@ function CanvasInner(props: {
           data: {
             title: "Follow-up",
             placeholder: draft.subToolId ? "Ask a follow-up from this tool..." : "Ask a follow-up from this card...",
+            context: {
+              anchorLabel: draft.target.label,
+              lines: branchContextCards(props.conversations, draft.target).map((card) =>
+                contextListLine(card.threadTitle, cardLabel(card.node)),
+              ),
+            },
             onOpenLlmConfig: props.onOpenLlmConfig,
             onSubmit: async (text: string, toneId: CanvasToneId) => {
               const started = await startCanvasQuestion(text, { ...draft.target, side: draft.side }, toneId);
@@ -1174,6 +1181,7 @@ function CanvasInner(props: {
   }, [
     branchesByAnchor,
     branchDrafts,
+    props.conversations,
     addBranchDraft,
     columnIndex,
     floatingDrafts,
