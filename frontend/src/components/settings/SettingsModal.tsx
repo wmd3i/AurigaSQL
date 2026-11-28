@@ -56,7 +56,6 @@ const THEMES: Array<{
   hint: string;
 }> = [
   { id: "light", label: "Light", icon: Sun, hint: "Light theme" },
-  { id: "light-yellow", label: "Light Yellow", icon: Sparkles, hint: "Warm light yellow theme" },
   { id: "dark", label: "Dark", icon: Moon, hint: "Dark theme" },
   {
     id: "system",
@@ -163,7 +162,7 @@ function GeneralTab() {
     <div className="space-y-6">
       <Section
         title="Theme"
-        description="Light, light yellow, dark or follow your computer, plus an accent color."
+        description="Light, dark or follow your computer, plus an accent color."
       >
         <div className="flex flex-col items-start gap-3">
           <div

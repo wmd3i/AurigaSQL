@@ -1,6 +1,6 @@
 /** Theme and accent preferences: stored per browser, applied as
  *  `data-theme` / `data-accent` on <html> (see the tokens in index.css). */
-export type ThemePreference = "light" | "light-yellow" | "dark" | "system";
+export type ThemePreference = "light" | "dark" | "system";
 export type AccentColor = "plain" | "teal" | "indigo" | "violet" | "amber" | "yellow";
 
 export const ACCENTS: AccentColor[] = ["plain", "teal", "indigo", "violet", "amber", "yellow"];
@@ -27,21 +27,15 @@ function write(key: string, value: string) {
 
 export function getThemePreference(): ThemePreference {
   const value = read(THEME_KEY);
-  return value === "light" || value === "light-yellow" || value === "dark" || value === "system"
-    ? value
-    : "light-yellow";
+  return value === "light" || value === "dark" || value === "system" ? value : "light";
 }
 
 export function getAccent(): AccentColor {
   const value = read(ACCENT_KEY);
-  return (ACCENTS as string[]).includes(value ?? "") ? (value as AccentColor) : "amber";
+  return (ACCENTS as string[]).includes(value ?? "") ? (value as AccentColor) : "plain";
 }
 
 export function applyTheme(preference: ThemePreference) {
-  if (preference === "light-yellow") {
-    document.documentElement.dataset.theme = "light-yellow";
-    return;
-  }
   const dark = preference === "dark" || (preference === "system" && window.matchMedia(DARK_QUERY).matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
