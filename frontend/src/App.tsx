@@ -5,7 +5,6 @@ import { CanvasPage } from "./components/canvas/CanvasPage";
 import { AgentResultPage } from "./components/result/AgentResultPage";
 import { SettingsModal } from "./components/settings/SettingsModal";
 import { SettingsContext, type OpenSettings, type SettingsTab } from "./state/settingsContext";
-import { DataConnectionModal } from "./components/home/DataConnectionModal";
 import { reducer } from "./state/reducer";
 import { initialState, type QueryMode } from "./state/types";
 import { useChat } from "./state/useChat";
@@ -154,8 +153,8 @@ export default function App() {
     setSettingsAddModel(Boolean(options?.addModel));
     setSettingsTab(tab ?? "general");
   };
-  const [dataConnectionOpen, setDataConnectionOpen] = useState(false);
   const [dataConnectionVersion, setDataConnectionVersion] = useState(0);
+  const [dataSelectionToken, setDataSelectionToken] = useState(0);
 
   async function refreshModels(preferredModelId?: string) {
     const r = await bff.models();
@@ -297,7 +296,7 @@ export default function App() {
   };
 
   const openWorkspaceSetup = () => {
-    setDataConnectionOpen(true);
+    openSettings("connections");
   };
 
   const handleDataConnectionChanged = async (source?: DataSource) => {
@@ -370,7 +369,6 @@ export default function App() {
         onOpen={openConversation}
         onDeleteConversation={onDeleteConversation}
         onRevertConversation={chat.revertConversationToNode}
-        onOpenWorkspaceSetup={openWorkspaceSetup}
         onAnswer={chat.answerPending}
         onFollowUp={(_database, query) =>
           Promise.resolve(
@@ -480,8 +478,9 @@ export default function App() {
         onDeleteConversation={onDeleteConversation}
         onStart={onStart}
         selectedDataSource={workspaceSource}
-        onOpenWorkspaceSetup={openWorkspaceSetup}
+        selectedSourceToken={dataSelectionToken}
         onOpenCanvas={openWorkspace}
+        onOpenConnections={() => openSettings("connections")}
         onOpenLlmConfig={() => openSettings("models")}
         dataConnectionVersion={dataConnectionVersion}
       />
@@ -494,17 +493,28 @@ export default function App() {
       <PendingChatsContext.Provider value={{ chats: state.pendingChats, dispatch }}>
       <SidebarWidthContext.Provider value={{ width: state.sidebar_width, dispatch }}>
       {content}
-      <DataConnectionModal
-        open={dataConnectionOpen}
-        onClose={() => setDataConnectionOpen(false)}
-        onChanged={handleDataConnectionChanged}
-      />
       <SettingsModal
         open={settingsTab !== null}
         initialTab={settingsTab ?? undefined}
         addModel={settingsAddModel}
         onClose={() => setSettingsTab(null)}
         onModelsChanged={refreshModels}
+        onDataSourcesChanged={handleDataConnectionChanged}
+        onSelectDataSourceAndClose={(source) => {
+          setWorkspaceSource(source);
+          setCanvasSourceMismatch(null);
+          setDataSelectionToken((token) => token + 1);
+          setDataConnectionVersion((version) => version + 1);
+          if (state.view !== "home") dispatch({ type: "NEW_FLOW" });
+          setSettingsTab(null);
+        }}
+        onOpenDataSourceInCanvas={(source) => {
+          setSettingsTab(null);
+          setCanvasSourceMismatch(null);
+          setDataSelectionToken((token) => token + 1);
+          const sameSource = activeConversation?.source?.id === source.id;
+          showWorkspaceCanvas(source, sameSource);
+        }}
       />
       </SidebarWidthContext.Provider>
       </PendingChatsContext.Provider>

@@ -17,7 +17,6 @@ export function WorkspaceSetupPage(props: {
         conversations={props.conversations}
         activeSection="workspace"
         onNewFlow={props.onNewFlow}
-        onOpenWorkspaceSetup={() => {}}
         onOpen={props.onOpen}
         onDeleteConversation={props.onDeleteConversation}
         onOpenLlmConfig={props.onOpenLlmConfig}
@@ -42,7 +41,7 @@ export function WorkspaceSetupPage(props: {
             </div>
           </header>
 
-          <DatabaseConnectionPanel onCreated={() => {}} />
+          <DatabaseConnectionPanel onCreated={() => props.onBack()} />
         </div>
       </main>
     </div>

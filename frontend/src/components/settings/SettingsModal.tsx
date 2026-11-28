@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  Archive,
   ArrowLeft,
   Check,
   Database,
@@ -16,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import type { DataSource } from "../../api/bff";
 import { cn } from "../../lib/cn";
 import type { SettingsTab } from "../../state/settingsContext";
 import {
@@ -32,6 +34,7 @@ import {
   getDesktopNotifications,
   setDesktopNotifications,
 } from "../../lib/notifications";
+import { DataConnectionModal } from "../home/DataConnectionModal";
 import { LlmConfigModal, type EmbeddedHeader } from "./LlmConfigModal";
 
 // Keep in sync with frontend/package.json "version".
@@ -41,7 +44,8 @@ const REPO_URL = "https://github.com/wmd3i/AurigaSQL";
 const TABS: Array<{ id: SettingsTab; label: string; icon: typeof Sun }> = [
   { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "models", label: "Models", icon: Sparkles },
-  { id: "data", label: "Data", icon: Database },
+  { id: "connections", label: "Connections", icon: Database },
+  { id: "data", label: "Data", icon: Archive },
   { id: "about", label: "About", icon: Info },
 ];
 
@@ -387,11 +391,14 @@ export function SettingsModal(props: {
   addModel?: boolean;
   onClose: () => void;
   onModelsChanged: (preferredModelId?: string) => Promise<void> | void;
+  onDataSourcesChanged?: (source?: DataSource) => Promise<void> | void;
+  onSelectDataSourceAndClose?: (source: DataSource) => void;
+  onOpenDataSourceInCanvas?: (source: DataSource) => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>(props.initialTab ?? "general");
   // Applies only to the first Models view after opening; switching tabs and back shows the list.
   const [addModel, setAddModel] = useState(Boolean(props.addModel));
-  // Sub-page header from the Models tab (e.g. "Add a model" with a back arrow).
+  // Sub-page header from embedded tabs (e.g. "Add a model" or "Connections · Demo Postgres" with a back arrow).
   const [subHeader, setSubHeader] = useState<EmbeddedHeader | null>(null);
 
   useEffect(() => {
@@ -411,6 +418,9 @@ export function SettingsModal(props: {
 
   if (!props.open) return null;
 
+  const isConnectionsTab = tab === "connections";
+  const hasEmbeddedHeader = tab === "models" || tab === "connections";
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm"
@@ -418,14 +428,26 @@ export function SettingsModal(props: {
         if (event.target === event.currentTarget) props.onClose();
       }}
     >
-      <div className="flex h-[min(600px,90vh)] w-full max-w-[760px] overflow-hidden rounded-[24px] border border-line bg-card shadow-[0_32px_100px_rgba(11,18,14,0.18)]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
+        className={cn(
+          "flex w-full flex-col overflow-hidden rounded-[24px] border border-line bg-card shadow-[0_32px_100px_rgba(11,18,14,0.18)] transition-[max-width,height] duration-200 md:flex-row",
+          isConnectionsTab
+            ? "h-[min(780px,92vh)] max-w-[1040px]"
+            : "h-[min(600px,90vh)] max-w-[760px]",
+        )}
+      >
         <nav
           role="tablist"
-          aria-orientation="vertical"
           aria-label="Settings sections"
-          className="flex w-[184px] shrink-0 flex-col gap-0.5 border-r border-line/70 bg-surface/60 px-3 py-5"
+          className="flex w-full shrink-0 flex-row flex-wrap items-center gap-1 border-b border-line/70 bg-surface/60 px-3 py-3 md:w-[184px] md:flex-col md:items-stretch md:gap-0.5 md:border-b-0 md:border-r md:py-5"
         >
-          <h2 className="mb-3 px-2.5 text-[18px] font-semibold tracking-[-0.01em] text-ink">
+          <h2
+            id="settings-dialog-title"
+            className="mr-2 px-2.5 text-[18px] font-semibold tracking-[-0.01em] text-ink md:mb-3 md:mr-0"
+          >
             Settings
           </h2>
           {TABS.map((item) => {
@@ -434,15 +456,18 @@ export function SettingsModal(props: {
             return (
               <button
                 key={item.id}
+                id={`settings-tab-${item.id}`}
                 type="button"
                 role="tab"
                 aria-selected={active}
+                aria-controls={`settings-panel-${item.id}`}
                 onClick={() => {
+                  if (item.id !== tab) setSubHeader(null);
                   setTab(item.id);
                   setAddModel(false);
                 }}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium transition",
+                  "flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13.5px] font-medium transition md:gap-2.5",
                   active
                     ? "bg-card text-ink shadow-sm ring-1 ring-line/70"
                     : "text-muted hover:bg-hover hover:text-ink",
@@ -457,21 +482,21 @@ export function SettingsModal(props: {
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Header row keeps the close button out of the content area, so no tab's content can sit under it. */}
-          <header className="flex shrink-0 items-center gap-3 pl-6 pr-4 pt-4">
-            {tab === "models" && subHeader?.onBack && (
+          <header className="flex shrink-0 items-center gap-3 border-b border-line/50 pb-3 pl-6 pr-4 pt-4">
+            {hasEmbeddedHeader && subHeader?.onBack && (
               <button
                 type="button"
                 onClick={subHeader.onBack}
                 disabled={subHeader.backDisabled}
-                title="Back to models"
-                aria-label="Back to models"
+                title={tab === "connections" ? "Back to new connection" : "Back to models"}
+                aria-label={tab === "connections" ? "Back to new connection" : "Back to models"}
                 className="-ml-2 -mr-1 flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-hover hover:text-ink disabled:opacity-45"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
             )}
-            <h2 className="flex-1 text-[15px] font-semibold text-ink">
-              {(tab === "models" && subHeader?.title) ||
+            <h2 className="flex-1 truncate text-[15px] font-semibold text-ink">
+              {(hasEmbeddedHeader && subHeader?.title) ||
                 TABS.find((item) => item.id === tab)?.label}
             </h2>
             <button
@@ -485,7 +510,12 @@ export function SettingsModal(props: {
             </button>
           </header>
           {tab === "models" ? (
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div
+              id="settings-panel-models"
+              role="tabpanel"
+              aria-labelledby="settings-tab-models"
+              className="flex min-h-0 flex-1 flex-col"
+            >
               <LlmConfigModal
                 embedded
                 open
@@ -495,8 +525,30 @@ export function SettingsModal(props: {
                 onModelsChanged={props.onModelsChanged}
               />
             </div>
+          ) : tab === "connections" ? (
+            <div
+              id="settings-panel-connections"
+              role="tabpanel"
+              aria-labelledby="settings-tab-connections"
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <DataConnectionModal
+                embedded
+                open
+                onHeaderChange={setSubHeader}
+                onClose={props.onClose}
+                onChanged={props.onDataSourcesChanged ?? (() => {})}
+                onSelectAndClose={props.onSelectDataSourceAndClose}
+                onOpenInCanvas={props.onOpenDataSourceInCanvas}
+              />
+            </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
+            <div
+              id={`settings-panel-${tab}`}
+              role="tabpanel"
+              aria-labelledby={`settings-tab-${tab}`}
+              className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4"
+            >
               {tab === "general" && <GeneralTab />}
               {tab === "data" && <DataTab />}
               {tab === "about" && <AboutTab />}

@@ -298,7 +298,6 @@ export function AgentResultPage(props: {
   onAnswer: (id: string, text: string) => void;
   onFollowUp: (database: string, query: string) => Promise<void>;
   onStop: (id: string) => void;
-  onOpenWorkspaceSetup: () => void;
   onOpenLlmConfig?: () => void;
   dataSources?: DataSource[];
 }) {
@@ -573,7 +572,6 @@ export function AgentResultPage(props: {
         activeSection="chat"
         activeConversationId={conv.id}
         onNewFlow={props.onNewFlow}
-        onOpenWorkspaceSetup={props.onOpenWorkspaceSetup}
         onOpen={props.onOpen}
         onDeleteConversation={props.onDeleteConversation}
         dataSources={sidebarSources}

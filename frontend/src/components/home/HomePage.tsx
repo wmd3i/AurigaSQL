@@ -56,9 +56,10 @@ export function HomePage(props: {
     parentContext?: string,
     options?: { preserveView?: boolean; canvasTone?: CanvasToneId; pendingId?: string },
   ) => Promise<void>;
-  onOpenWorkspaceSetup: () => void;
   onOpenCanvas: (source: DataSource | null) => void;
   selectedDataSource?: DataSource | null;
+  selectedSourceToken?: number;
+  onOpenConnections?: () => void;
   onOpenLlmConfig: () => void;
   dataConnectionVersion?: number;
 }) {
@@ -73,6 +74,7 @@ export function HomePage(props: {
   const [highlight, setHighlight] = useState(false);
   const [pendingChat, setPendingChat] = useState<PendingChat | null>(null);
   const startControllerRef = useRef<AbortController | null>(null);
+  const appliedSelectionTokenRef = useRef<number | undefined>(undefined);
   const busy = pendingChat !== null;
   const selectedSource = sources.find((source) => source.id === selectedSourceId && source.ready) ?? null;
   const activeConversation = props.conversations.find((conversation) => conversation.id === props.activeId) ?? null;
@@ -196,6 +198,22 @@ export function HomePage(props: {
   }
 
   useEffect(() => {
+    if (props.selectedSourceToken !== undefined) {
+      if (appliedSelectionTokenRef.current === props.selectedSourceToken) return;
+      appliedSelectionTokenRef.current = props.selectedSourceToken;
+      if (props.selectedDataSource?.id) {
+        setSelectedSourceId(props.selectedDataSource.id);
+        setSourceMismatch(null);
+      }
+      return;
+    }
+    if (props.selectedDataSource?.id) {
+      setSelectedSourceId(props.selectedDataSource.id);
+      setSourceMismatch(null);
+    }
+  }, [props.selectedSourceToken, props.selectedDataSource?.id]);
+
+  useEffect(() => {
     refreshSources()
       .catch(() =>
         setHint("Cannot reach backend — run: bash backend/scripts/start_services.sh"),
@@ -223,7 +241,12 @@ export function HomePage(props: {
     }
 
     if (!sources.some((source) => source.ready)) {
-      setHint("Connect data before asking a question");
+      toast.error("Connect data before asking a question", {
+        id: "data-not-connected",
+        action: props.onOpenConnections
+          ? { label: "Connect data", onClick: props.onOpenConnections }
+          : undefined,
+      });
       if (sources.length > 0) {
         setHighlight(true);
         setTimeout(() => setHighlight(false), 1500);
@@ -307,7 +330,6 @@ export function HomePage(props: {
           setDraft("");
           props.onNewFlow();
         }}
-        onOpenWorkspaceSetup={props.onOpenWorkspaceSetup}
         onOpen={props.onOpen}
         onDeleteConversation={props.onDeleteConversation}
         dataSources={sources}
@@ -339,11 +361,9 @@ export function HomePage(props: {
                   onChange={setDraft}
                   onSend={handleSend}
                   onStop={handlePauseStart}
-                  onOpenDataSetup={props.onOpenWorkspaceSetup}
                   mode="agent"
                   onModeChange={handleModeChange}
                   busy={busy}
-                  hasDataSource={sources.some((source) => source.ready)}
                   hint={hint}
                   onOpenLlmConfig={props.onOpenLlmConfig}
                 />
