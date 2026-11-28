@@ -7,12 +7,12 @@
     <script>
       // Apply the saved theme before first paint to avoid a light flash (see src/lib/theme.ts).
       (function () {
-        var pref = "system", accent = "plain";
+        var pref = "light", accent = "plain";
         try {
-          pref = localStorage.getItem("aurigasql-theme") || "system";
+          pref = localStorage.getItem("aurigasql-theme") || "light";
           accent = localStorage.getItem("aurigasql-accent") || "plain";
         } catch (e) {}
-        var dark = pref === "dark" || (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        var dark = pref === "dark" || (pref === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.dataset.theme = dark ? "dark" : "light";
         document.documentElement.dataset.accent = accent;
       })();

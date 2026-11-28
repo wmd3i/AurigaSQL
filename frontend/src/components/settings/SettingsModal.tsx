@@ -72,6 +72,7 @@ const ACCENT_SWATCH: Record<AccentColor, { label: string; color: string }> = {
   indigo: { label: "Indigo", color: "#4f46e5" },
   violet: { label: "Violet", color: "#7c3aed" },
   amber: { label: "Amber", color: "#b45309" },
+  yellow: { label: "Yellow", color: "#eab308" },
 };
 
 /** Placeholder handler: these settings render but are not wired up yet. */
@@ -158,16 +159,16 @@ function GeneralTab() {
   }
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-6">
       <Section
         title="Theme"
         description="Light, dark or follow your computer, plus an accent color."
       >
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col items-start gap-3">
           <div
             role="radiogroup"
             aria-label="Mode"
-            className="inline-flex rounded-full border border-line bg-surface p-0.5"
+            className="inline-flex flex-wrap rounded-full border border-line bg-surface p-0.5"
           >
             {THEMES.map((option) => {
               const Icon = option.icon;
@@ -196,11 +197,10 @@ function GeneralTab() {
               );
             })}
           </div>
-          <span aria-hidden className="h-6 w-px bg-line" />
           <div
             role="radiogroup"
             aria-label="Accent color"
-            className="flex items-center gap-1.5"
+            className="flex flex-wrap items-center gap-1.5"
           >
             {ACCENTS.map((id) => {
               const swatch = ACCENT_SWATCH[id];
@@ -232,7 +232,16 @@ function GeneralTab() {
                     style={id === "plain" ? undefined : { background: swatch.color }}
                   >
                     {active && (
-                      <Check className={cn("h-3.5 w-3.5", id === "plain" ? "text-canvas" : "text-white")} />
+                      <Check
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          id === "plain"
+                            ? "text-canvas"
+                            : id === "yellow"
+                              ? "text-[#1c1917]"
+                              : "text-white",
+                        )}
+                      />
                     )}
                   </span>
                   {/* Instant label on hover / keyboard focus (the native title tooltip is slow). */}
@@ -436,7 +445,7 @@ export function SettingsModal(props: {
           "flex w-full flex-col overflow-hidden rounded-[24px] border border-line bg-card shadow-[0_32px_100px_rgba(11,18,14,0.18)] transition-[max-width,height] duration-200 md:flex-row",
           isConnectionsTab
             ? "h-[min(780px,92vh)] max-w-[1040px]"
-            : "h-[min(600px,90vh)] max-w-[760px]",
+            : "h-[min(640px,90vh)] max-w-[760px]",
         )}
       >
         <nav

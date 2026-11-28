@@ -2,10 +2,10 @@
 
 /* Semantic tokens. Components must ONLY use these via the @theme utilities
    below — never raw palette colors. The theme is chosen by `data-theme` on
-   <html> (see src/lib/theme.ts): light (default) or dark, both on a neutral
-   grey scale like Open WebUI. The accent color is chosen separately by
-   `data-accent` (plain default, teal, indigo, violet, amber), with its own light and
-   dark shades so it stays readable in both. */
+   <html> (see src/lib/theme.ts): light (default) or dark.
+   The accent color is chosen separately by `data-accent` (plain default,
+   teal, indigo, violet, amber, yellow), with its own light and dark shades so
+   it stays readable in both. */
 :root {
   color-scheme: light;
   --surface: #f8f8f8;      /* page / sidebar background */
@@ -60,10 +60,12 @@
 :root[data-accent="indigo"] { --accent: #4f46e5; --accent-soft: #eef2ff; }
 :root[data-accent="violet"] { --accent: #7c3aed; --accent-soft: #f5f3ff; }
 :root[data-accent="amber"] { --accent: #b45309; --accent-soft: #fef3c7; }
+:root[data-accent="yellow"] { --accent: #a16207; --accent-soft: #fef9c3; }
 :root[data-theme="dark"][data-accent="teal"] { --accent: #2dd4bf; }
 :root[data-theme="dark"][data-accent="indigo"] { --accent: #818cf8; }
 :root[data-theme="dark"][data-accent="violet"] { --accent: #a78bfa; }
 :root[data-theme="dark"][data-accent="amber"] { --accent: #fbbf24; }
+:root[data-theme="dark"][data-accent="yellow"] { --accent: #fde047; }
 :root[data-theme="dark"]:not([data-accent="plain"])[data-accent] { --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent); }
 
 @theme inline {
