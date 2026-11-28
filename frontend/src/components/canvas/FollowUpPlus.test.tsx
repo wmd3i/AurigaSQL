@@ -1,0 +1,35 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { FollowUpPlus } from "./FollowUpPlus";
+
+const noop = () => {};
+
+describe("FollowUpPlus", () => {
+  it("renders nothing for an unavailable side without branches", () => {
+    expect(renderToStaticMarkup(<FollowUpPlus side="left" available={false} selected={false} onClick={noop} />)).toBe("");
+  });
+
+  it("hides the plus until the card is hovered", () => {
+    const html = renderToStaticMarkup(<FollowUpPlus side="right" available selected={false} onClick={noop} />);
+    expect(html).toContain('aria-label="Follow up on the right"');
+    expect(html).toContain("opacity-0");
+  });
+
+  it("shows the plus while the card is selected", () => {
+    const html = renderToStaticMarkup(<FollowUpPlus side="bottom" available selected onClick={noop} />);
+    expect(html).toContain('aria-label="Follow up below"');
+    expect(html).not.toContain("opacity-0");
+  });
+
+  it("keeps the branch count visible and offers + N on hover", () => {
+    const html = renderToStaticMarkup(<FollowUpPlus side="right" count={2} available selected={false} onClick={noop} />);
+    expect(html).toContain(">2<");
+    expect(html).toContain('aria-label="Follow up on the right (2 already)"');
+  });
+
+  it("shows a plain count badge when the side cannot take another follow-up", () => {
+    const html = renderToStaticMarkup(<FollowUpPlus side="right" count={3} available={false} selected={false} onClick={noop} />);
+    expect(html).not.toContain("<button");
+    expect(html).toContain(">3<");
+  });
+});

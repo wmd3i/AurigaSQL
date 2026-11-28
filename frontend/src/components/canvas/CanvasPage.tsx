@@ -37,13 +37,15 @@ import { conversationWorkId } from "../../lib/conversationHistory";
 import { resolveCanvasRowY } from "../../lib/canvasLayout";
 import {
   BRANCH_GAP_Y,
-  BRANCH_MIN_X_OFFSET,
-  BRANCH_X_PADDING,
+  DRAFT_BELOW_GAP_Y,
   branchHandles,
   branchPosition,
   resolveAnchorCanvasId,
   sideSiblingIndex,
+  toolBranchTotal,
+  upsertBranchDraft,
 } from "../../lib/branchPlacement";
+import { followUpSides as sidesForFollowUp, type FollowUpCard } from "../../lib/followUp";
 
 const COLUMN_W = 384;
 const GAP_Y = 50;
@@ -70,14 +72,16 @@ const DEFAULT_FIT_VIEW = { padding: DEFAULT_THREAD_FOCUS.padding, maxZoom: DEFAU
 
 type CanvasNode = CardNode | FloatingDraftNodeT;
 type LeftPanel = "threads" | "schema" | "data" | null;
-type BranchDraftKind = "follow_up" | "fork";
 type BranchDraft = {
   id: string;
   x: number;
   y: number;
   parentCanvasNodeId: string;
+  parentNodeId: string;
   target: BranchTarget;
-  kind: BranchDraftKind;
+  side: CanvasBranchSide;
+  /** Started from a sub-tool inside an expanded tool group. */
+  subToolId?: string;
 };
 type ResizeEdge =
   | "right"
@@ -509,21 +513,6 @@ function CanvasInner(props: {
         : selectedNode.data.tn
       : null;
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.defaultPrevented) return;
-      if (event.key.toLowerCase() !== "f") return;
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
-      const createDraft = selectedNode?.data.onCreateBranchDraft;
-      if (!createDraft) return;
-      event.preventDefault();
-      createDraft("follow_up");
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedNode]);
 
   const zoomPercent = Math.round(zoom * 100);
 
@@ -701,31 +690,6 @@ function CanvasInner(props: {
     }, 0);
   }, [props.prefillDraft?.token, setNodes]);
 
-  const addBranchDraft = useCallback(
-    (parentCanvasNodeId: string, target: BranchTarget, kind: BranchDraftKind) => {
-      const parentNode = nodesRef.current.find((node) => node.id === parentCanvasNodeId && node.type === "card") as CardNode | undefined;
-      if (!parentNode) return;
-      const parentWidth = cardWidth(parentNode.data.tn);
-      const parentHeight = nodeHeights[parentCanvasNodeId] ?? estimateHeight(parentNode.data.tn);
-      const draftId = `branch-draft:${kind}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-      const x =
-        kind === "fork"
-          ? parentNode.position.x + Math.max(BRANCH_MIN_X_OFFSET, parentWidth + BRANCH_X_PADDING)
-          : parentNode.position.x + parentWidth / 2 - FLOATING_DRAFT_W / 2;
-      const y =
-        kind === "fork"
-          ? parentNode.position.y
-          : parentNode.position.y + parentHeight + 94;
-
-      setBranchDrafts((current) => [
-        ...current.filter((draft) => !(draft.parentCanvasNodeId === parentCanvasNodeId && draft.kind === kind)),
-        { id: draftId, x, y, parentCanvasNodeId, target, kind },
-      ]);
-      setSelectedBranchDraftId(draftId);
-      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === draftId })));
-    },
-    [nodeHeights, setNodes],
-  );
 
   const emptyWorkspace = visibleConversations.length === 0;
 
@@ -770,6 +734,38 @@ function CanvasInner(props: {
     branchesByAnchor.forEach((branches, key) => out.set(key, branches.map((branch) => branch.id)));
     return out;
   }, [branchesByAnchor]);
+
+  /** Open (or re-select) the follow-up draft for one side of a card. */
+  const addBranchDraft = useCallback(
+    (parentCanvasNodeId: string, target: BranchTarget, side: CanvasBranchSide, subToolId?: string) => {
+      const parentNode = nodesRef.current.find((node) => node.id === parentCanvasNodeId && node.type === "card") as CardNode | undefined;
+      if (!parentNode) return;
+      const parentRect = {
+        x: parentNode.position.x,
+        y: parentNode.position.y,
+        width: parentNode.measured?.width ?? cardWidth(parentNode.data.tn),
+        height: nodeHeights[parentCanvasNodeId] ?? estimateHeight(parentNode.data.tn),
+      };
+      const sameSide =
+        (branchesByAnchor.get(parentCanvasNodeId) ?? []).filter((branch) => branch.side === side).length +
+        branchDrafts.filter((draft) => draft.parentCanvasNodeId === parentCanvasNodeId && draft.side === side).length;
+      const position = branchPosition(side, parentRect, FLOATING_DRAFT_W, sameSide, DRAFT_BELOW_GAP_Y);
+      const draft: BranchDraft = {
+        id: `branch-draft:${side}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+        ...position,
+        parentCanvasNodeId,
+        parentNodeId: target.parentNodeId,
+        target: { ...target, side },
+        side,
+        subToolId,
+      };
+      const next = upsertBranchDraft(branchDrafts, draft);
+      setBranchDrafts(next.drafts);
+      setSelectedBranchDraftId(next.selectedId);
+      setNodes((current) => current.map((node) => ({ ...node, selected: node.id === next.selectedId })));
+    },
+    [branchDrafts, branchesByAnchor, nodeHeights, setNodes],
+  );
 
   const collectFollowerCardIds = useCallback(
     (canvasNodeId: string) => {
@@ -995,11 +991,11 @@ function CanvasInner(props: {
           type: "floatingDraft",
           position: { x: draft.x, y: draft.y },
           data: {
-            title: draft.kind === "fork" ? "Fork question" : "Follow-up question",
-            placeholder: draft.kind === "fork" ? "Explore a parallel direction..." : "Ask a follow-up from this card...",
+            title: "Follow-up",
+            placeholder: draft.subToolId ? "Ask a follow-up from this tool..." : "Ask a follow-up from this card...",
             onOpenLlmConfig: props.onOpenLlmConfig,
             onSubmit: async (text: string, toneId: CanvasToneId) => {
-              const started = await startCanvasQuestion(text, { ...draft.target, side: draft.kind === "follow_up" ? "below" : "right" }, toneId);
+              const started = await startCanvasQuestion(text, { ...draft.target, side: draft.side }, toneId);
               if (!started) return false;
               setBranchDrafts((currentDrafts) => currentDrafts.filter((item) => item.id !== draft.id));
               setSelectedBranchDraftId((current) => (current === draft.id ? null : current));
@@ -1077,6 +1073,53 @@ function CanvasInner(props: {
           autoCardPositions.set(id, computedPosition);
           const manuallyPositioned = manualCardPositionIdsRef.current.has(id);
           const position = manuallyPositioned && existing ? existing.position : computedPosition;
+          const anchorBranches = branchesByAnchor.get(id) ?? [];
+          const isErrorCard = tn.kind === "error";
+          const previousGroup = gi > 0 ? groups[gi - 1].nodes : [];
+          // An Error card is not in the transcript, so a follow-up from it hangs off the last real card.
+          const anchorNodeId = isErrorCard ? previousGroup[previousGroup.length - 1]?.id : tn.id;
+          const followUp = (() => {
+            if (tn.kind === "tool_group") {
+              const counts: Record<string, number> = {};
+              anchorBranches.forEach((branch) => {
+                counts[branch.parentNodeId] = (counts[branch.parentNodeId] ?? 0) + 1;
+              });
+              return {
+                sides: undefined,
+                counts: undefined,
+                onFollowUp: undefined,
+                tool: {
+                  counts,
+                  total: toolBranchTotal(counts),
+                  onFollowUp: (tool: ThreadNode) =>
+                    addBranchDraft(id, { parentThreadId: conv.id, parentNodeId: tool.id, label: cardLabel(tool), mode: "manual" }, "right", tool.id),
+                },
+              };
+            }
+            if (!anchorNodeId) return { sides: undefined, counts: undefined, onFollowUp: undefined, tool: undefined };
+            return {
+              sides: sidesForFollowUp({
+                card: tn as FollowUpCard,
+                status: conv.status,
+                isLastCard: lastGroup,
+                hasBelowBranch: anchorBranches.some((branch) => branch.side === "below"),
+                hasBelowDraft: branchDrafts.some((draft) => draft.parentCanvasNodeId === id && draft.side === "below"),
+              }),
+              counts: {
+                left: anchorBranches.filter((branch) => branch.side === "left").length,
+                right: anchorBranches.filter((branch) => branch.side === "right").length,
+              },
+              onFollowUp: (side: CanvasBranchSide) =>
+                addBranchDraft(id, {
+                  parentThreadId: conv.id,
+                  parentNodeId: anchorNodeId,
+                  label: isErrorCard ? "Error" : cardLabel(tn),
+                  mode: tn.kind === "question" || (tn.kind === "answer" && conv.parentThreadId === null) ? "auto" : "manual",
+                  anchorError: isErrorCard || undefined,
+                }, side),
+              tool: undefined,
+            };
+          })();
           const node: CardNode = {
             id,
             type: "card",
@@ -1090,35 +1133,14 @@ function CanvasInner(props: {
               canvasTone: gi === 0 && tn.kind === "question" ? conv.canvasTone : undefined,
               onHeightChange: (height) => onCardHeightChange(id, height),
               compact: props.embedded,
-              onCreateBranchDraft:
-                tn.kind === "tool" || tn.kind === "answer" || tn.kind === "agent_question" || tn.kind === "question"
-                  ? (kind) =>
-                      addBranchDraft(id, {
-                        parentThreadId: conv.id,
-                        parentNodeId: tn.id,
-                        label: cardLabel(tn),
-                        mode:
-                          tn.kind === "question" || (tn.kind === "answer" && conv.parentThreadId === null)
-                            ? "auto"
-                            : "manual",
-                        side: kind === "follow_up" ? "below" : "right",
-                      }, kind)
-                  : undefined,
+              followUpSides: followUp.sides,
+              branchCounts: followUp.counts,
+              onFollowUp: followUp.onFollowUp,
               onRevert:
                 !props.onRevertConversation || (gi === 0 && tn.kind === "question" && !branchOrigin)
                   ? undefined
                   : () => props.onRevertConversation?.(conv.id, tn.id),
-              onBranchTool:
-                tn.kind === "tool_group"
-                  ? async (tool, prompt) => {
-                      await startCanvasQuestion(prompt, {
-                        parentThreadId: conv.id,
-                        parentNodeId: tool.id,
-                        label: cardLabel(tool),
-                        mode: "manual",
-                      });
-                    }
-                  : undefined,
+              toolFollowUp: followUp.tool,
               onAnswer:
                 tn.kind === "agent_question" && tn.body === conv.pendingQuestion && tn.answer === undefined
                   ? (text) => props.onAnswer(conv.id, text)
@@ -1216,7 +1238,7 @@ function CanvasInner(props: {
         id: `e:draft:${draft.parentCanvasNodeId}:${draft.id}`,
         source: draft.parentCanvasNodeId,
         target: draft.id,
-        ...branchHandles(draft.kind === "follow_up" ? "below" : "right"),
+        ...branchHandles(draft.side, draft.subToolId ? { toolId: draft.subToolId, groupOpen: true } : undefined),
         style: draftEdge,
       });
     });

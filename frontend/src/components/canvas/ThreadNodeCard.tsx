@@ -9,16 +9,17 @@ import {
   Columns3,
   Copy,
   Database,
-  GitBranch,
   Loader2,
   RotateCcw,
   Sparkles,
   Terminal,
   Wrench,
-  X,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "../../lib/cn";
+import { canFollowUp, type FollowUpSides } from "../../lib/followUp";
+import type { CanvasBranchSide } from "../../state/types";
+import { FollowUpPlus } from "./FollowUpPlus";
 import type { ThreadNode } from "../../lib/buildNodes";
 import { formatCell, parseResultTable } from "../../lib/parseResultTable";
 import { stripSystemNote } from "../../lib/stripSystemNote";
@@ -47,8 +48,13 @@ export type CardData = {
   footer: ThreadFooter; // "— ended —" under the LAST node of a finished thread
   onHeightChange?: (height: number) => void;
   onBranch?: (prompt: string) => void | Promise<void>;
-  onBranchTool?: (tool: ThreadNode, prompt: string) => void | Promise<void>;
-  onCreateBranchDraft?: (kind: "follow_up" | "fork") => void;
+  /** Plus buttons on the card's edges (spec: follow-up sides). */
+  followUpSides?: FollowUpSides;
+  /** Committed follow-ups per side, shown as a count on that edge. */
+  branchCounts?: { left: number; right: number };
+  onFollowUp?: (side: CanvasBranchSide) => void;
+  /** Tool groups: per sub-tool follow-up counts and the right-edge plus handler. */
+  toolFollowUp?: { counts: Record<string, number>; total: number; onFollowUp: (tool: ThreadNode) => void };
   onRevert?: () => void;
   onAnswer?: (text: string) => void | Promise<void>;
   onInspectTool?: (tool: ThreadNode, openDetail?: boolean) => void;
@@ -83,15 +89,6 @@ function branchOriginText(branchOrigin: NonNullable<CardData["branchOrigin"]>): 
     return `Parallel path from ${branchOrigin.label}`;
   }
   return `Continues from ${branchOrigin.label}`;
-}
-
-function withBranchStartTimeout(work: void | Promise<void>, timeoutMs = 15000): Promise<void> {
-  return Promise.race([
-    Promise.resolve(work),
-    new Promise<void>((_, reject) => {
-      window.setTimeout(() => reject(new Error("Branch start timed out. Check that the backend services are running.")), timeoutMs);
-    }),
-  ]);
 }
 
 function ExpandableClamp(props: { children: ReactNode; collapsedHeight?: number }) {
@@ -403,7 +400,7 @@ function ToolGroupCard(props: {
   open: boolean;
   onToggle: () => void;
   onInspectTool?: (tool: ThreadNode, openDetail?: boolean) => void;
-  onBranchTool?: (tool: ThreadNode, prompt: string) => void;
+  toolFollowUp?: CardData["toolFollowUp"];
 }) {
   const itemHeight = 44;
   const itemGap = 8;
@@ -412,10 +409,6 @@ function ToolGroupCard(props: {
   const buttonCenterY = buttonHeight / 2;
   const connectorWidth = 44;
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
-  const [branchToolId, setBranchToolId] = useState<string | null>(null);
-  const [branchSubmittingToolId, setBranchSubmittingToolId] = useState<string | null>(null);
-  const [branchDraft, setBranchDraft] = useState("");
-  const [branchError, setBranchError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [connectorLayout, setConnectorLayout] = useState<{ height: number; centers: Record<string, number> }>(() => ({
     height: props.tools.length * itemHeight + Math.max(0, props.tools.length - 1) * itemGap,
@@ -455,23 +448,7 @@ function ToolGroupCard(props: {
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [branchToolId, expandedToolId, itemGap, itemHeight, props.open, props.tools]);
-
-  async function submitToolBranch(tool: ThreadNode) {
-    const text = branchDraft.trim();
-    if (!text || !props.onBranchTool) return;
-    setBranchSubmittingToolId(tool.id);
-    setBranchError(null);
-    try {
-      await withBranchStartTimeout(props.onBranchTool(tool, text));
-      setBranchDraft("");
-      setBranchToolId(null);
-    } catch (error) {
-      setBranchError(error instanceof Error ? error.message : "Could not start branch.");
-    } finally {
-      setBranchSubmittingToolId(null);
-    }
-  }
+  }, [expandedToolId, itemGap, itemHeight, props.open, props.tools]);
 
   return (
     <div className="relative flex items-start">
@@ -568,86 +545,14 @@ function ToolGroupCard(props: {
                   </button>
                   </div>
                   {expandedToolId === tool.id && <ToolInlineDetails tool={tool} />}
-                  {props.onBranchTool && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (branchToolId === tool.id) {
-                        setBranchToolId(null);
-                        setBranchDraft("");
-                        setBranchError(null);
-                        return;
-                      }
-                      setBranchToolId(tool.id);
-                      setBranchDraft("");
-                      setBranchError(null);
-                      }}
-                      className={cn(
-                        "absolute -right-4 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card text-muted shadow-md transition-all",
-                        branchToolId === tool.id ? "opacity-100 text-accent" : "opacity-0 group-hover/tool:opacity-100 hover:text-ink",
-                      )}
-                      aria-label="Branch from this tool"
-                      title="Branch from this tool"
-                    >
-                      <GitBranch className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {branchToolId === tool.id && (
-                    <div
-                      className="absolute left-[calc(100%+16px)] top-1/2 z-30 w-[280px] -translate-y-1/2 rounded-2xl border border-line bg-card p-3 shadow-[0_18px_40px_rgba(15,23,42,0.12)]"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-accent">
-                        <GitBranch className="h-3.5 w-3.5" />
-                        New branch
-                        <button
-                          onClick={() => {
-                            setBranchToolId(null);
-                            setBranchDraft("");
-                            setBranchError(null);
-                          }}
-                          className="ml-auto rounded p-0.5 text-faint hover:bg-hover hover:text-ink"
-                          aria-label="Close branch prompt"
-                          title="Close branch prompt"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      <textarea
-                        rows={3}
-                        value={branchDraft}
-                        onChange={(event) => setBranchDraft(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" && !event.shiftKey) {
-                            event.preventDefault();
-                            submitToolBranch(tool);
-                          }
-                        }}
-                        placeholder="Ask a follow-up from this tool..."
-                        className={cn(inputScrollClass, "w-full resize-none rounded-xl border border-line bg-canvas px-3 py-2 text-[13px] leading-relaxed text-ink placeholder:text-faint focus:border-accent focus:outline-none")}
-                      />
-                      <div className="mt-2 flex items-center justify-end">
-                        {branchError && (
-                          <div className="mr-auto max-w-[205px] text-[11px] leading-snug text-danger">
-                            {branchError}
-                          </div>
-                        )}
-                        <button
-                          onClick={() => submitToolBranch(tool)}
-                          disabled={!branchDraft.trim() || branchSubmittingToolId === tool.id}
-                          className="flex h-8 w-8 items-center justify-center rounded-full bg-invert text-invert-ink hover:opacity-90 disabled:opacity-40"
-                          aria-label="Send branch prompt"
-                        >
-                          {branchSubmittingToolId === tool.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <ArrowUp className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <FollowUpPlus
+                    side="right"
+                    available={canFollowUp(tool) && Boolean(props.toolFollowUp)}
+                    selected={false}
+                    count={props.toolFollowUp?.counts[tool.id] ?? 0}
+                    hoverScope="tool"
+                    onClick={() => props.toolFollowUp?.onFollowUp(tool)}
+                  />
                 </div>
               ))}
             </div>
@@ -659,7 +564,7 @@ function ToolGroupCard(props: {
 }
 
 export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
-  const { tn, pulse, footer, onHeightChange, onBranchTool, onAnswer, onInspectTool, onCreateBranchDraft, onRevert, branchOrigin, compact } = data;
+  const { tn, pulse, footer, onHeightChange, onAnswer, onInspectTool, onRevert, branchOrigin, compact } = data;
   const modelLabel = useSelectedModelLabel();
   const [detailsOpen, setDetailsOpen] = useState(false); // fold level 1
   const [answerDraft, setAnswerDraft] = useState("");
@@ -681,7 +586,6 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
       tn.title === "get_knowledge_definition" ||
       tn.title === "get_all_knowledge_definitions" ||
       tn.title === "get_all_external_knowledge_names");
-  const branchable = tn.kind === "tool" || tn.kind === "answer" || tn.kind === "agent_question" || tn.kind === "question";
   const cardWidthClass = isAnswer ? "w-[560px]" : tn.kind === "tool_group" ? (detailsOpen ? "w-[704px]" : "w-[320px]") : "w-[320px]";
   const canvasTone = tn.kind === "question" ? getCanvasTone(data.canvasTone) : undefined;
   const heightSignature =
@@ -839,7 +743,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
     <div ref={rootRef} className="nopan group relative">
       <SideHandles targetStyle={groupTargetHandleStyle} sourceStyle={groupSourceHandleStyle} />
 
-      {selected && ((branchable && onCreateBranchDraft) || onRevert) && (
+      {selected && onRevert && (
         <div
           className={cn(
             "nodrag nopan absolute left-1/2 top-0 z-30 flex -translate-x-1/2 items-center border border-line/80 bg-card/95 font-semibold text-ink shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur",
@@ -849,20 +753,6 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          {branchable && onCreateBranchDraft && (
-            <button
-              type="button"
-              onClick={() => onCreateBranchDraft("fork")}
-              className={cn(
-                "flex items-center rounded-full transition-colors hover:bg-hover",
-              compact ? "h-6 gap-1 px-1" : "h-[28px] gap-1 px-1.5",
-              )}
-              aria-label="Fork from this card"
-            >
-              <GitBranch className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-              <span>Fork</span>
-            </button>
-          )}
           {onRevert && (
             <button
               type="button"
@@ -880,27 +770,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
         </div>
       )}
 
-      {selected && branchable && onCreateBranchDraft && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onCreateBranchDraft("follow_up");
-          }}
-          className={cn(
-            "nodrag nopan absolute left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 border border-line bg-card/95 font-semibold text-ink shadow-[0_14px_34px_rgba(15,23,42,0.12)] transition hover:bg-card",
-            compact
-              ? "top-[calc(100%+7px)] rounded-[13px] px-2.5 py-1 text-[11px]"
-              : "top-[calc(100%+10px)] rounded-[15px] px-3 py-1.5 text-[13px]",
-          )}
-          aria-label="Follow up from this card"
-        >
-          <GitBranch className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-          Follow Up
-          <span className="text-muted">F</span>
-        </button>
-      )}
-
+      <div className="relative">
       <div
         ref={cardRef}
         className={cardClassName}
@@ -923,7 +793,7 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
             open={detailsOpen}
             onToggle={() => setDetailsOpen(!detailsOpen)}
             onInspectTool={onInspectTool}
-            onBranchTool={onBranchTool}
+            toolFollowUp={data.toolFollowUp}
           />
         ) : foldable ? (
           <>
@@ -1066,8 +936,19 @@ export function ThreadNodeCard({ data, selected }: NodeProps<CardNode>) {
           </>
         )}
       </div>
+        {data.followUpSides && data.onFollowUp && (
+          <>
+            <FollowUpPlus side="left" available={data.followUpSides.left} selected={Boolean(selected)} count={data.branchCounts?.left} onClick={() => data.onFollowUp?.("left")} />
+            <FollowUpPlus side="right" available={data.followUpSides.right} selected={Boolean(selected)} count={data.branchCounts?.right} onClick={() => data.onFollowUp?.("right")} />
+            <FollowUpPlus side="bottom" available={data.followUpSides.below} selected={Boolean(selected)} onClick={() => data.onFollowUp?.("below")} />
+          </>
+        )}
+        {tn.kind === "tool_group" && !detailsOpen && (data.toolFollowUp?.total ?? 0) > 0 && (
+          <FollowUpPlus side="right" available={false} selected={false} count={data.toolFollowUp?.total} onClick={() => {}} />
+        )}
+      </div>
 
-      {footer && <div className="mt-2 text-center text-[12px] text-faint">— ended —</div>}
+      {footer && <div className="mt-4 text-center text-[12px] text-faint">— ended —</div>}
 
     </div>
   );
